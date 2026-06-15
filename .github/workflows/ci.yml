@@ -1,351 +1,187 @@
-name: 乘风AI - 构建与打包
+name: 乘风AI - IPA 自动打包
 
-# 触发条件
+# 触发条件：任何推送都触发
 on:
   push:
     branches: [ main, master, develop ]
-  pull_request:
-    branches: [ main, master ]
   workflow_dispatch:
 
 # 环境变量
 env:
-  PROJECT_NAME: 乘风AI
-  SCHEME: 乘风AI
-  XCODE_VERSION: "15"
-  IOS_VERSION: "17.0"
-  DEVICE: "iPhone 15"
+  PROJECT_NAME: "ChengFengAI"
+  SOURCE_DIR: "乘风AI"
+  SCHEME: "乘风AI"
 
-# 任务定义
+# Job 定义
 jobs:
-  # ---------- 1. 构建检查 (iOS Simulator) ----------
-  build-debug:
-    name: 构建 Debug (iOS Simulator)
-    runs-on: macos-15
-    steps:
-      - name: 检出代码
-        uses: actions/checkout@v4
 
-      - name: 配置 Xcode
-        run: |
-          xcodebuild -version
-          xcodebuild -showsdks | grep -i iphone
-
-      - name: 安装 XcodeGen
-        run: brew install xcodegen
-
-      - name: 生成 Xcode 项目
-        run: xcodegen generate
-
-      - name: 构建 Debug
-        run: |
-          xcodebuild \
-            -project "${{ env.PROJECT_NAME }}.xcodeproj" \
-            -scheme "${{ env.SCHEME }}" \
-            -configuration Debug \
-            -sdk iphonesimulator \
-            -destination "platform=iOS Simulator,name=${{ env.DEVICE }},OS=${{ env.IOS_VERSION }}" \
-            -derivedDataPath build \
-            build \
-            CODE_SIGNING_ALLOWED=NO | xcpretty
-
-      - name: 上传构建日志
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-debug-log
-          path: build/Logs
-
-  # ---------- 2. 构建 Release (真机) ----------
-  build-release:
-    name: 构建 Release (iOS Device)
-    runs-on: macos-15
-    needs: build-debug
-    steps:
-      - name: 检出代码
-        uses: actions/checkout@v4
-
-      - name: 安装 XcodeGen
-        run: brew install xcodegen
-
-      - name: 生成 Xcode 项目
-        run: xcodegen generate
-
-      - name: 构建 Release
-        run: |
-          xcodebuild \
-            -project "${{ env.PROJECT_NAME }}.xcodeproj" \
-            -scheme "${{ env.SCHEME }}" \
-            -configuration Release \
-            -sdk iphoneos \
-            -derivedDataPath build-release \
-            build \
-            CODE_SIGNING_ALLOWED=NO | xcpretty
-
-      - name: 上传 Release 构建日志
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-release-log
-          path: build-release/Logs
-
-  # ---------- 3. Archive + IPA 打包（可侧装）----------
+  # ============ 核心：直接打包 IPA（最可靠的方式） ============
   build-ipa:
-    name: 打包 IPA (可侧装 iPhone)
+    name: 生成 IPA (可侧装 iPhone)
     runs-on: macos-15
-    needs: [build-debug, build-release]
     steps:
-      - name: 检出代码
+
+      # --- 1. 检出代码 ---
+      - name: 📥 检出代码
         uses: actions/checkout@v4
 
-      - name: 安装 XcodeGen
-        run: brew install xcodegen
-
-      - name: 生成 Xcode 项目
-        run: xcodegen generate
-
-      - name: 真机 Release Archive（iphoneos SDK）
+      # --- 2. 检查环境 ---
+      - name: 🔍 检查 Xcode 和 SDK
         run: |
-          mkdir -p build-ipa
+          echo "=== Xcode 版本 ==="
+          xcodebuild -version
+          echo ""
+          echo "=== 可用 iOS SDK ==="
+          xcodebuild -showsdks 2>&1 | grep -i "ios" || true
+          echo ""
+          echo "=== 可用模拟器 ==="
+          xcrun simctl list devices available 2>&1 | head -5 || true
+
+      # --- 3. 安装 xcodegen ---
+      - name: 🛠️ 安装 XcodeGen
+        run: |
+          brew install xcodegen
+          xcodegen --version
+
+      # --- 4. 生成 Xcode 项目 ---
+      - name: 📋 生成 Xcode 项目
+        run: |
+          echo "=== 生成前文件列表 ==="
+          ls -la
+          echo ""
+          xcodegen generate --spec project.yml
+          echo ""
+          echo "=== 生成后项目文件 ==="
+          ls -la *.xcodeproj 2>&1 || echo "(未找到 .xcodeproj)"
+
+      # --- 5. 验证项目 ---
+      - name: ✅ 验证 scheme 和 target
+        run: |
+          echo "=== 项目 targets ==="
+          xcodebuild -list -project "${{ env.SOURCE_DIR }}.xcodeproj" 2>&1 || true
+          echo ""
+          echo "=== 项目 schemes ==="
+          xcodebuild -list -project "${{ env.SOURCE_DIR }}.xcodeproj" 2>&1 | grep -A 20 "Schemes:" || true
+
+      # --- 6. 真机 Archive（iphoneos SDK，不签名） ---
+      - name: 📦 真机 Archive (Release)
+        run: |
+          mkdir -p build-output
           xcodebuild \
-            -project "${{ env.PROJECT_NAME }}.xcodeproj" \
+            -project "${{ env.SOURCE_DIR }}.xcodeproj" \
             -scheme "${{ env.SCHEME }}" \
             -configuration Release \
             -sdk iphoneos \
-            -archivePath "build-ipa/${{ env.PROJECT_NAME }}.xcarchive" \
-            -derivedDataPath build-ipa/derived \
-            archive \
+            -archivePath "build-output/${{ env.SOURCE_DIR }}.xcarchive" \
+            -derivedDataPath "build-output/derived" \
+            clean archive \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             ENABLE_HARDENED_RUNTIME=NO \
-            ONLY_ACTIVE_ARCH=NO | xcpretty || true
+            DEVELOPMENT_TEAM="" \
+            2>&1 | tail -80
+          EXIT_CODE=${PIPESTATUS[0]}
+          echo ""
+          echo "=== Archive 退出码: $EXIT_CODE ==="
+          echo ""
+          echo "=== Archive 产物检查 ==="
+          ls -la "build-output/" 2>&1 || true
+          if [ -d "build-output/${{ env.SOURCE_DIR }}.xcarchive" ]; then
+            echo "✓ .xcarchive 存在"
+            echo "=== Archive 内容 ==="
+            ls -la "build-output/${{ env.SOURCE_DIR }}.xcarchive/" 2>&1 || true
+            if [ -d "build-output/${{ env.SOURCE_DIR }}.xcarchive/Products/Applications" ]; then
+              echo "✓ Products/Applications 存在"
+              APP_COUNT=$(ls "build-output/${{ env.SOURCE_DIR }}.xcarchive/Products/Applications/" 2>&1 | wc -l | tr -d ' ')
+              echo "  App 数量: $APP_COUNT"
+            else
+              echo "✗ Products/Applications 不存在"
+            fi
+          else
+            echo "✗ .xcarchive 不存在"
+          fi
+          exit $EXIT_CODE
 
-      - name: 检查 Archive
+      # --- 7. 从 Archive 提取 .app 并打包成 IPA ---
+      - name: 📲 打包 IPA (Payload 方式，无需开发者账号)
         run: |
-          ls -la "build-ipa/${{ env.PROJECT_NAME }}.xcarchive"
-          echo "=== Archive Products ==="
-          ls -la "build-ipa/${{ env.PROJECT_NAME }}.xcarchive/Products/Applications/" 2>/dev/null || echo "(No Products/Applications)"
-          echo "=== Archive dSYMs ==="
-          ls -la "build-ipa/${{ env.PROJECT_NAME }}.xcarchive/dSYMs/" 2>/dev/null || echo "(No dSYMs)"
-
-      - name: 打包 IPA (Payload 方式，无需开发者账号)
-        run: |
-          mkdir -p output
-          APP_DIR="build-ipa/ipa_temp"
-          rm -rf "$APP_DIR"
-          mkdir -p "$APP_DIR/Payload"
-
-          # 从 .xcarchive 找到 .app
-          XCARCHIVE="build-ipa/${{ env.PROJECT_NAME }}.xcarchive"
+          XCARCHIVE="build-output/${{ env.SOURCE_DIR }}.xcarchive"
           APP_PATH=""
+          # 查找 .app
           if [ -d "$XCARCHIVE/Products/Applications" ]; then
             for app in "$XCARCHIVE/Products/Applications/"*.app; do
-              APP_PATH="$app"
-              break
+              if [ -d "$app" ]; then
+                APP_PATH="$app"
+                break
+              fi
             done
           fi
-
-          if [ -z "$APP_PATH" ] || [ ! -d "$APP_PATH" ]; then
-            echo "ERROR: .app not found"
-            echo "=== DIR listing ==="
-            find "$XCARCHIVE" -maxdepth 3 -type d
+          if [ -z "$APP_PATH" ]; then
+            echo "ERROR: 未在 Archive 中找到 .app"
+            echo "=== 完整目录树 ==="
+            find "$XCARCHIVE" -maxdepth 4 -type d 2>&1 | head -50 || true
             exit 1
           fi
+          echo "✓ 找到 App: $(basename "$APP_PATH")"
 
-          echo "Found App: $(basename "$APP_PATH")"
-          cp -R "$APP_PATH" "$APP_DIR/Payload/"
+          # 构建 Payload 目录 → IPA
+          mkdir -p build-ipa/Payload
+          cp -R "$APP_PATH" "build-ipa/Payload/"
+          echo "✓ 已复制到 Payload"
 
-          # 确保可执行文件有执行权限
+          # 检查并确保可执行权限
           APP_NAME=$(basename "$APP_PATH")
-          EXEC_NAME=$(/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$APP_DIR/Payload/$APP_NAME/Info.plist" 2>/dev/null || echo "${{ env.PROJECT_NAME }}")
-          chmod +x "$APP_DIR/Payload/$APP_NAME/$EXEC_NAME" 2>/dev/null || true
+          EXEC_NAME=$(/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "build-ipa/Payload/$APP_NAME/Info.plist" 2>/dev/null || echo "${{ env.SOURCE_DIR }}")
+          chmod +x "build-ipa/Payload/$APP_NAME/$EXEC_NAME" 2>/dev/null || true
+          echo "✓ 可执行文件: $EXEC_NAME"
 
-          # ZIP 压缩为 IPA
-          echo "Compressing Payload -> IPA"
-          (cd "$APP_DIR" && zip -qr "$APP_DIR/${{ env.PROJECT_NAME }}.ipa" .)
-          mv "$APP_DIR/${{ env.PROJECT_NAME }}.ipa" "output/${{ env.PROJECT_NAME }}.ipa"
+          # ZIP 压缩 = IPA
+          cd build-ipa && zip -qr "${{ env.PROJECT_NAME }}.ipa" . && cd ..
+          mkdir -p final-output
+          cp "build-ipa/${{ env.PROJECT_NAME }}.ipa" "final-output/${{ env.PROJECT_NAME }}.ipa"
 
-          SIZE=$(du -h "output/${{ env.PROJECT_NAME }}.ipa" | cut -f1)
-          echo "IPA 生成成功: output/${{ env.PROJECT_NAME }}.ipa ($SIZE)"
+          SIZE=$(du -h "final-output/${{ env.PROJECT_NAME }}.ipa" | cut -f1)
+          echo ""
+          echo "✅ IPA 生成成功：final-output/${{ env.PROJECT_NAME }}.ipa ($SIZE)"
+          echo ""
+          echo "=== IPA 结构检查 ==="
+          ls -lh "final-output/${{ env.PROJECT_NAME }}.ipa"
+          echo ""
+          echo "=== Payload 内容 ==="
+          unzip -l "final-output/${{ env.PROJECT_NAME }}.ipa" | head -20
 
-          # 验证 IPA 结构
-          echo "=== IPA 结构 ==="
-          ls -lh "output/${{ env.PROJECT_NAME }}.ipa"
-          unzip -l "output/${{ env.PROJECT_NAME }}.ipa" | head -20
-
-      - name: 上传 IPA
+      # --- 8. 上传 IPA ---
+      - name: 📤 上传 IPA (可直接侧装 iPhone)
         uses: actions/upload-artifact@v4
         with:
-          name: ipa-${{ env.PROJECT_NAME }}
-          path: output/*.ipa
+          name: "ChengFengAI-iOS-IPA"
+          path: "final-output/*.ipa"
 
-      - name: 上传 Archive
+      # --- 9. 上传 Archive 调试产物 ---
+      - name: 📤 上传 Archive (调试用)
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: archive-${{ env.PROJECT_NAME }}
-          path: build-ipa/${{ env.PROJECT_NAME }}.xcarchive
+          name: "ChengFengAI-iOS-Archive"
+          path: "build-output/*.xcarchive"
 
-  # ---------- 4. 源代码打包 ----------
-  package-source:
-    name: 源代码打包
-    runs-on: ubuntu-latest
-    needs: [build-debug, build-release]
-    steps:
-      - name: 检出代码
-        uses: actions/checkout@v4
-
-      - name: 生成版本信息
-        run: |
-          echo "BUILD_TIMESTAMP=$(date -u +%Y%m%d_%H%M%S)" >> $GITHUB_ENV
-          echo "GIT_COMMIT=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
-          echo "GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD)" >> $GITHUB_ENV
-
-      - name: 生成项目清单
-        run: |
-          cat > SOURCE_PACKAGE_INFO.txt << EOF
-          乘风AI - 源代码包信息
-          ================================
-          生成时间: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
-          Git 分支: ${{ env.GIT_BRANCH }}
-          Git 提交: ${{ env.GIT_COMMIT }}
-          构建号: ${{ github.run_id }}
-          ================================
-          文件结构:
-          EOF
-          find . -type f -not -path './.git/*' | head -100 | sort >> SOURCE_PACKAGE_INFO.txt
-
-      - name: 打包源代码 (ZIP)
-        run: |
-          zip -r "${{ env.PROJECT_NAME }}-source-${{ env.GIT_COMMIT }}.zip" . \
-            -x "*.git*" -x "*.DS_Store" -x "*.xcuserdata*" \
-            -x "*/build/*" -x "*/DerivedData/*" -x "*.xcodeproj*"
-
-      - name: 打包源代码 (TAR.GZ)
-        run: |
-          tar --exclude='.git' --exclude='.DS_Store' --exclude='build' \
-              --exclude='DerivedData' --exclude='*.xcodeproj' \
-              -czf "${{ env.PROJECT_NAME }}-source-${{ env.GIT_COMMIT }}.tar.gz" .
-
-      - name: 上传 ZIP 源码包
-        uses: actions/upload-artifact@v4
-        with:
-          name: source-zip-${{ env.GIT_COMMIT }}
-          path: ${{ env.PROJECT_NAME }}-source-${{ env.GIT_COMMIT }}.zip
-
-      - name: 上传 TAR.GZ 源码包
-        uses: actions/upload-artifact@v4
-        with:
-          name: source-tar-${{ env.GIT_COMMIT }}
-          path: ${{ env.PROJECT_NAME }}-source-${{ env.GIT_COMMIT }}.tar.gz
-
-      - name: 上传包信息文件
-        uses: actions/upload-artifact@v4
-        with:
-          name: package-info
-          path: SOURCE_PACKAGE_INFO.txt
-
-  # ---------- 5. 代码统计与检查 ----------
+  # ============ 代码统计（独立运行，不影响 IPA） ============
   stats:
     name: 代码统计
     runs-on: ubuntu-latest
     steps:
-      - name: 检出代码
+      - name: 📥 检出代码
         uses: actions/checkout@v4
-
-      - name: 统计代码行数
+      - name: 📊 统计
         run: |
-          echo "=== 代码统计报告 ==="
+          echo "=== 乘风AI 项目统计 ==="
           echo ""
-          echo "Swift 文件数量: $(find . -name "*.swift" -not -path "./.git/*" | wc -l)"
-          echo "YAML 配置文件: $(find . -name "*.yml" -o -name "*.yaml" -not -path "./.git/*" | wc -l)"
+          echo "Swift 文件: $(find . -name "*.swift" -not -path "./.git/*" | wc -l) 个"
+          echo "Swift 代码行数:"
+          find . -name "*.swift" -not -path "./.git/*" -exec wc -l {} + 2>&1 | tail -1
           echo ""
-          echo "=== 代码行数 ==="
-          find . -name "*.swift" -not -path "./.git/*" -exec wc -l {} + | tail -1
+          echo "YAML 配置: $(find . -name "*.yml" -not -path "./.git/*" | wc -l) 个"
           echo ""
-          echo "=== 文件大小 ==="
-          find . -name "*.swift" -not -path "./.git/*" -exec du -ch {} + | tail -1
-
-      - name: 显示文件结构
-        run: |
-          echo "=== 项目文件结构 ==="
-          find . -not -path './.git/*' -not -name '.DS_Store' | sort | head -80
-
-  # ---------- 6. 生成 GitHub Release (含 IPA) ----------
-  release:
-    name: 生成 Release (Tag + IPA)
-    runs-on: ubuntu-latest
-    needs: [build-debug, build-release, build-ipa, package-source, stats]
-    if: startsWith(github.ref, 'refs/tags/')
-    permissions:
-      contents: write
-    steps:
-      - name: 检出代码
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: 下载 IPA 产物
-        uses: actions/download-artifact@v4
-        with:
-          name: ipa-${{ env.PROJECT_NAME }}
-          path: release-assets
-
-      - name: 获取版本号
-        id: get_version
-        run: |
-          VERSION=${GITHUB_REF#refs/tags/}
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
-          echo "Version: $VERSION"
-          echo "=== 下载的 IPA ==="
-          ls -lh release-assets/
-
-      - name: 生成 Release 说明
-        run: |
-          cat > RELEASE_NOTES.md << EOF
-          # 乘风AI ${{ env.VERSION }}
-          ## 发布说明
-          ### 📦 版本特性
-          - 通义千问云端 API 调用（支持中文会话）
-          - iOS 本地规则模型兜底（离线可用）
-          - 智能上下文管理与自动截断
-          - 系统原生语音朗读
-          - 文本 / Markdown 导出
-          - 模型调度器云端/本地自动切换
-          ### 📲 侧装安装 (Sideload)
-          1. 下载下方 **IPA 文件**（乘风AI.ipa）
-          2. Windows 用户: 安装 [Sideloadly](https://sideloadly.io/)，iPhone 连接电脑，拖入 IPA 安装
-          3. Mac 用户: 安装 [AltStore](https://altstore.io/) 或直接用 Xcode 安装
-          4. iOS 设置 → 通用 → VPN与设备管理 → 信任开发者
-          5. 启动 App，在设置中填入 DashScope API Key
-          ### 💻 源代码构建
-          - Xcode 15.0+，iOS 16.0+，Swift 5.9+
-          - \`brew install xcodegen\` → \`xcodegen generate\` → 打开 \`乘风AI.xcodeproj\`
-          - 运行 \`./package_ipa.sh\` 即可本地打包 IPA
-          EOF
-
-      - name: 打包 Release 源代码
-        run: |
-          mkdir -p release-package
-          cp -r "乘风AI" release-package/
-          cp project.yml release-package/
-          cp Package.swift release-package/
-          cp build.sh release-package/
-          cp package_ipa.sh release-package/
-          cp exportOptions.plist release-package/
-          cp .gitignore release-package/
-          cp RELEASE_NOTES.md release-package/
-          cd release-package && tar -czf "../${{ env.PROJECT_NAME }}-release-${{ env.VERSION }}.tar.gz" .
-
-      - name: 创建 GitHub Release（含 IPA 和源码包）
-        uses: softprops/action-gh-release@v1
-        with:
-          name: 乘风AI ${{ env.VERSION }}
-          body_path: RELEASE_NOTES.md
-          files: |
-            release-assets/${{ env.PROJECT_NAME }}.ipa
-            ${{ env.PROJECT_NAME }}-release-${{ env.VERSION }}.tar.gz
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          echo "=== 关键文件 ==="
+          find . -maxdepth 3 -type f -not -path "./.git/*" | sort | head -30
