@@ -22,173 +22,83 @@ jobs:
           echo "--- Xcode ---"
           xcodebuild -version
           echo ""
-          echo "--- iPhoneOS SDK ---"
-          xcrun --sdk iphoneos --show-sdk-path
+          echo "--- iOS SDK ---"
+          xcrun --sdk iphoneos --show-sdk-version
           echo ""
-          echo "--- swiftc ---"
-          swiftc --version | head -2
+          echo "--- XcodeGen ---"
+          brew install xcodegen || true
+          xcodegen --version 2>/dev/null || echo "(installed via brew)"
           echo ""
           echo "--- Current dir ---"
           pwd
+          echo ""
+          echo "--- Project structure ---"
+          ls -la
+          echo ""
+          echo "--- 乘风AI sources ---"
+          find "乘风AI" -name "*.swift" | head -20
+          echo ""
+          echo "Total Swift files: $(find "乘风AI" -name "*.swift" | wc -l | tr -d ' ')"
 
-      - name: Copy Swift sources to src/
+      - name: Generate Xcode project with XcodeGen
         run: |
-          mkdir -p src
-          echo "=== Swift source files ==="
-          FILES=()
-          while IFS= read -r -d '' file; do
-            fname=$(basename "$file")
-            if [ "$fname" = "Package.swift" ]; then
-              echo "  SKIP (Package.swift): $file"
-              continue
-            fi
-            cp "$file" "src/$fname"
-            FILES+=("$fname")
-            echo "  OK: $file -> src/$fname"
-          done < <(find . -name "*.swift" -not -path "*/Tests/*" -not -path "./.git/*" -print0)
-
+          echo "=== Generating Xcode project ==="
+          xcodegen generate --spec project.yml
           echo ""
-          echo "Total copied: ${#FILES[@]}"
+          echo "=== Project files ==="
+          ls -la *.xcodeproj 2>/dev/null || echo "(no xcodeproj found)"
           echo ""
-          echo "=== src/ listing ==="
-          ls -1 src/ | sort
+          echo "=== Project targets ==="
+          xcodebuild -list -project "乘风AI.xcodeproj" 2>/dev/null || echo "(xcodebuild list failed)"
 
-      - name: Compile iOS arm64 binary
+      - name: Archive iOS app
         run: |
-          SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path)
-          echo "SDK: $SDK_PATH"
+          echo "=== Archiving iOS app ==="
+          xcodebuild \
+            -project "乘风AI.xcodeproj" \
+            -scheme "乘风AI" \
+            -sdk iphoneos \
+            -configuration Release \
+            -destination "generic/platform=iOS" \
+            -archivePath "$PWD/build/ChengFengAI.xcarchive" \
+            archive \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM="" \
+            PROVISIONING_PROFILE="" \
+            2>&1 | tail -100
           echo ""
+          echo "=== Archive structure ==="
+          ls -la build/ 2>/dev/null || echo "(no build directory)"
 
-          set +e
-          xcrun --sdk iphoneos swiftc \
-            -target arm64-apple-ios16.0 \
-            -sdk "$SDK_PATH" \
-            -framework SwiftUI \
-            -framework Foundation \
-            -framework UIKit \
-            -framework Combine \
-            -framework AVFoundation \
-            -framework UniformTypeIdentifiers \
-            -framework Network \
-            -framework CoreGraphics \
-            -o chengfengai \
-            src/*.swift > /tmp/compile.log 2>&1
-          RC=$?
-          set -e
-
-          echo ""
-          echo "=== Compilation output (last 300 lines) ==="
-          tail -300 /tmp/compile.log
-          echo ""
-
-          if [ $RC -ne 0 ]; then
-            echo ""
-            echo "=== Full compilation output ==="
-            cat /tmp/compile.log
-            echo ""
-            echo "FAILED: swiftc exit code $RC"
-            exit $RC
-          fi
-
-          echo "SUCCESS: Compilation done"
-          echo ""
-          echo "Binary:"
-          ls -lh chengfengai
-          echo ""
-          echo "Binary type:"
-          file chengfengai
-
-      - name: Build .app bundle
+      - name: Build IPA from archive
         run: |
-          mkdir -p "Payload/ChengFengAI.app"
-          cp chengfengai "Payload/ChengFengAI.app/ChengFengAI"
-          chmod +x "Payload/ChengFengAI.app/ChengFengAI"
-          echo "Copied executable"
+          echo "=== Archive contents ==="
+          APP_DIR="build/ChengFengAI.xcarchive/Products/Applications"
+          ls -la "$APP_DIR/" 2>/dev/null
+          APP_PATH=$(ls -d "$APP_DIR"/*.app 2>/dev/null | head -1)
+          echo "App path: $APP_PATH"
 
-          cat > "Payload/ChengFengAI.app/Info.plist" << 'PLIST'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-            <key>CFBundleDevelopmentRegion</key>
-            <string>en</string>
-            <key>CFBundleExecutable</key>
-            <string>ChengFengAI</string>
-            <key>CFBundleIdentifier</key>
-            <string>com.chengfeng.ai</string>
-            <key>CFBundleInfoDictionaryVersion</key>
-            <string>6.0</string>
-            <key>CFBundleName</key>
-            <string>ChengFengAI</string>
-            <key>CFBundleDisplayName</key>
-            <string>ChengFengAI</string>
-            <key>CFBundlePackageType</key>
-            <string>APPL</string>
-            <key>CFBundleShortVersionString</key>
-            <string>1.0.0</string>
-            <key>CFBundleVersion</key>
-            <string>1</string>
-            <key>LSRequiresIPhoneOS</key>
-            <true/>
-            <key>MinimumOSVersion</key>
-            <string>16.0</string>
-            <key>UIApplicationSupportsIndirectInputEvents</key>
-            <true/>
-            <key>UILaunchScreen</key>
-            <dict/>
-            <key>UIRequiredDeviceCapabilities</key>
-            <array>
-              <string>arm64</string>
-            </array>
-            <key>UISupportedInterfaceOrientations</key>
-            <array>
-              <string>UIInterfaceOrientationPortrait</string>
-              <string>UIInterfaceOrientationLandscapeLeft</string>
-              <string>UIInterfaceOrientationLandscapeRight</string>
-            </array>
-            <key>UISupportedInterfaceOrientations~ipad</key>
-            <array>
-              <string>UIInterfaceOrientationPortrait</string>
-              <string>UIInterfaceOrientationPortraitUpsideDown</string>
-              <string>UIInterfaceOrientationLandscapeLeft</string>
-              <string>UIInterfaceOrientationLandscapeRight</string>
-            </array>
-          </dict>
-          </plist>
-          PLIST
-          echo "Created Info.plist"
           echo ""
-          echo "--- .app contents ---"
-          ls -lh "Payload/ChengFengAI.app/"
+          echo "=== Creating IPA (Payload structure) ==="
+          mkdir -p build/IPA/Payload
+          cp -R "$APP_PATH" build/IPA/Payload/
 
-      - name: Package IPA
-        run: |
-          mkdir -p output
-          zip -qr "output/ChengFengAI.ipa" Payload
+          echo ""
+          echo "=== Creating IPA zip ==="
+          cd build/IPA
+          zip -r "ChengFengAI.ipa" Payload
+          ls -lh
+          cd ../..
 
-          echo "SUCCESS: IPA created"
           echo ""
-          ls -lh output/
-          echo ""
-          echo "--- IPA structure ---"
-          unzip -l "output/ChengFengAI.ipa" | head -15
+          echo "=== Final IPA ==="
+          ls -lh build/IPA/ChengFengAI.ipa
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
           name: ChengFengAI-iOS-IPA
-          path: output/*.ipa
+          path: build/IPA/ChengFengAI.ipa
           if-no-files-found: error
-
-  stats:
-    name: Code statistics
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Stats
-        run: |
-          echo "Swift files: $(find . -name "*.swift" -not -path "./.git/*" | wc -l)"
-          echo ""
-          echo "Line count:"
-          find . -name "*.swift" -not -path "./.git/*" -exec wc -l {} + 2>&1 | tail -1
