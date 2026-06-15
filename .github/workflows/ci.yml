@@ -61,20 +61,15 @@ jobs:
 
       - name: Build for iOS device (arm64) + ad-hoc sign
         run: |
-          echo "=== Building iOS app (arm64) with ad-hoc signing ==="
+          echo "=== Building iOS app (arm64) — signing disabled during build ==="
           xcodebuild \
             -project "ChengFengAI.xcodeproj" \
             -scheme "ChengFengAI" \
             -configuration Release \
             -sdk iphoneos \
             -derivedDataPath "$PWD/build/dd" \
-            CODE_SIGNING_ALLOWED=YES \
-            CODE_SIGNING_REQUIRED=YES \
-            CODE_SIGN_IDENTITY="-" \
-            CODE_SIGNING_ENTITLEMENTS="" \
-            DEVELOPMENT_TEAM="" \
-            PROVISIONING_PROFILE="" \
-            PROVISIONING_PROFILE_SPECIFIER="" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
             ONLY_ACTIVE_ARCH=NO \
             ARCHS="arm64" \
             ENABLE_BITCODE=NO \
@@ -111,35 +106,51 @@ jobs:
           plutil -p "$APP_PATH/Info.plist" 2>&1 | head -30
 
           echo ""
-          echo "=== Force re-sign with ad-hoc identity (deep) ==="
+          echo "=== Force ad-hoc sign with codesign ==="
           codesign --force --deep --sign - "$APP_PATH" 2>&1
-          echo "Signing result: $?"
+          CS_RESULT=$?
+          echo "codesign result: $CS_RESULT"
+
+          if [ $CS_RESULT -ne 0 ]; then
+            echo ""
+            echo "=== Fallback: using ldid for pseudo-signing ==="
+            brew list ldid 2>/dev/null || brew install ldid 2>&1 | tail -3
+            EXEC_FILE="$APP_PATH/$EXEC_NAME"
+            if [ -f "$EXEC_FILE" ]; then
+              ldid -S "$EXEC_FILE" 2>&1
+              echo "ldid result: $?"
+            fi
+          fi
 
           echo ""
           echo "=== Verify signature ==="
-          codesign -dv "$APP_PATH" 2>&1 || true
+          codesign -dv "$APP_PATH" 2>&1 || echo "(codesign verify skipped)"
 
           echo ""
-          echo "=== Check _CodeSignature ==="
-          ls -la "$APP_PATH/_CodeSignature/" 2>/dev/null || echo "(no _CodeSignature - creating placeholder)"
+          echo "=== Ensure _CodeSignature exists ==="
           if [ ! -d "$APP_PATH/_CodeSignature" ]; then
+            echo "(no _CodeSignature found — creating minimal plist)"
             mkdir -p "$APP_PATH/_CodeSignature"
-            echo "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" > "$APP_PATH/_CodeSignature/CodeResources"
-            echo "<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">" >> "$APP_PATH/_CodeSignature/CodeResources"
-            echo "<plist version=\"1.0\"><dict></dict></plist>" >> "$APP_PATH/_CodeSignature/CodeResources"
+            cat > "$APP_PATH/_CodeSignature/CodeResources" <<'PLIST_EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict></dict></plist>
+PLIST_EOF
           fi
+          ls -la "$APP_PATH/_CodeSignature/" 2>/dev/null
 
           echo ""
           echo "=== Create PkgInfo ==="
           printf 'APPL????' > "$APP_PATH/PkgInfo"
+          ls -la "$APP_PATH/PkgInfo"
 
           echo ""
           echo "=== Final .app structure summary ==="
           echo "--- top level ---"
-          ls "$APP_PATH/"
+          ls -la "$APP_PATH/"
           echo ""
           echo "--- file sizes ---"
-          du -h "$APP_PATH"/* 2>/dev/null | head -20
+          du -h "$APP_PATH" 2>/dev/null
 
           echo ""
           echo "APP_PATH=$APP_PATH" >> $GITHUB_ENV
