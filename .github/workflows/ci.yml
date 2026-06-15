@@ -1,4 +1,4 @@
-name: 乘风AI - IPA 自动打包 (swiftc 直编)
+name: ChengFengAI - iOS IPA Auto Build
 
 on:
   push:
@@ -7,65 +7,56 @@ on:
 
 jobs:
   build-ipa:
-    name: 生成可侧装 iOS IPA
+    name: Build iOS IPA
     runs-on: macos-15
     steps:
 
-      # --- 1. 检出代码 ---
       - name: Checkout source
         uses: actions/checkout@v4
 
-      # --- 2. 系统/SDK 检查 ---
-      - name: Check system and SDK
+      - name: Environment info
         run: |
-          export LC_ALL=C.UTF-8
-          echo "=== macOS ==="
+          echo "--- macOS ---"
           sw_vers
           echo ""
-          echo "=== Xcode ==="
+          echo "--- Xcode ---"
           xcodebuild -version
           echo ""
-          echo "=== iPhoneOS SDK ==="
+          echo "--- iPhoneOS SDK ---"
           xcrun --sdk iphoneos --show-sdk-path
           echo ""
-          echo "=== swiftc ==="
+          echo "--- swiftc ---"
           swiftc --version | head -2
-
-      # --- 3. 检查源码 ---
-      - name: Find and list source files
-        run: |
-          export LC_ALL=C.UTF-8
-          echo "=== Current dir ==="
+          echo ""
+          echo "--- Current dir ---"
           pwd
           echo ""
-          echo "=== Top-level dirs ==="
-          ls -d */ 2>/dev/null || ls -la
-          echo ""
-          echo "=== All Swift files ==="
-          find . -name "*.swift" -not -path "./.git/*" | sort
-          echo ""
-          echo "=== Count ==="
-          find . -name "*.swift" -not -path "./.git/*" | wc -l
+          echo "--- Top-level items ---"
+          ls -la
 
-      # --- 4. 交叉编译 arm64 真机二进制 ---
-      - name: Compile iOS arm64 binary
+      - name: Copy Swift sources to plain dir
         run: |
-          export LC_ALL=C.UTF-8
+          mkdir -p src
+          echo "Searching for .swift files..."
+          COUNT=0
+          while IFS= read -r -d '' file; do
+            cp "$file" src/
+            COUNT=$((COUNT + 1))
+          done < <(find . -path "./.git" -prune -o -name "*.swift" -not -path "*/Tests/*" -not -path "*/Tests*" -print0)
+          echo "Copied $COUNT .swift files to src/"
+          echo ""
+          echo "--- src/ contents ---"
+          ls -la src/ | head -40
+          echo ""
+          echo "Total in src:"
+          ls src/ | wc -l
+
+      - name: Compile iOS arm64 binary with swiftc
+        run: |
           SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path)
           echo "SDK: $SDK_PATH"
-
-          # 自动收集所有 Swift 源文件（按路径排序保证编译顺序稳定）
-          SWIFT_FILES=$(find . -name "*.swift" -not -path "./.git/*" -not -path "./Tests/*" | sort | tr '\n' ' ')
-          FILE_COUNT=$(find . -name "*.swift" -not -path "./.git/*" -not -path "./Tests/*" | wc -l | tr -d ' ')
-          echo "Source files: $FILE_COUNT"
-
-          if [ "$FILE_COUNT" -eq 0 ]; then
-            echo "ERROR: No Swift source files found"
-            exit 1
-          fi
-
-          echo "Compiling with swiftc for arm64-apple-ios16.0..."
-          echo "This may take 1-3 minutes..."
+          echo ""
+          echo "Compiling $(ls src/*.swift | wc -l | tr -d ' ') files for arm64-apple-ios16.0..."
           echo ""
 
           xcrun --sdk iphoneos swiftc \
@@ -80,33 +71,30 @@ jobs:
             -framework Network \
             -framework CoreGraphics \
             -o chengfengai \
-            $SWIFT_FILES 2>&1 | tail -200
+            src/*.swift 2>&1 | tail -250
 
-          BUILD_EXIT=${PIPESTATUS[0]}
-
+          RC=${PIPESTATUS[0]}
           echo ""
-          if [ $BUILD_EXIT -ne 0 ]; then
-            echo "FAILED: swiftc exit code $BUILD_EXIT"
-            exit $BUILD_EXIT
+          if [ $RC -ne 0 ]; then
+            echo "FAILED: swiftc exit code $RC"
+            exit $RC
           fi
-
           echo "SUCCESS: Compilation done"
-          echo "File:"
+          echo ""
+          echo "Binary:"
           ls -lh chengfengai
-          echo "Type:"
+          echo ""
+          echo "Binary type:"
           file chengfengai
 
-      # --- 5. 组装 .app 应用包 ---
       - name: Build .app bundle
         run: |
-          APP_DIR="Payload/chengfengai.app"
-          mkdir -p "$APP_DIR"
-
-          cp chengfengai "$APP_DIR/chengfengai"
-          chmod +x "$APP_DIR/chengfengai"
+          mkdir -p "Payload/ChengFengAI.app"
+          cp chengfengai "Payload/ChengFengAI.app/ChengFengAI"
+          chmod +x "Payload/ChengFengAI.app/ChengFengAI"
           echo "Copied executable"
 
-          cat > "$APP_DIR/Info.plist" << 'PLIST'
+          cat > "Payload/ChengFengAI.app/Info.plist" << 'PLIST'
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
@@ -114,7 +102,7 @@ jobs:
             <key>CFBundleDevelopmentRegion</key>
             <string>en</string>
             <key>CFBundleExecutable</key>
-            <string>chengfengai</string>
+            <string>ChengFengAI</string>
             <key>CFBundleIdentifier</key>
             <string>com.chengfeng.ai</string>
             <key>CFBundleInfoDictionaryVersion</key>
@@ -158,25 +146,22 @@ jobs:
           </plist>
           PLIST
           echo "Created Info.plist"
-
           echo ""
-          echo "=== .app contents ==="
-          ls -lh "$APP_DIR/"
+          echo "--- .app contents ---"
+          ls -lh "Payload/ChengFengAI.app/"
 
-      # --- 6. 打包为 IPA ---
       - name: Package IPA
         run: |
           mkdir -p output
-          zip -qr "output/chengfengai.ipa" Payload
+          zip -qr "output/ChengFengAI.ipa" Payload
 
           echo "SUCCESS: IPA created"
           echo ""
           ls -lh output/
           echo ""
-          echo "=== IPA structure ==="
-          unzip -l "output/chengfengai.ipa" | head -15
+          echo "--- IPA structure ---"
+          unzip -l "output/ChengFengAI.ipa" | head -15
 
-      # --- 7. 上传 IPA ---
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
@@ -192,7 +177,6 @@ jobs:
         uses: actions/checkout@v4
       - name: Stats
         run: |
-          echo "=== Statistics ==="
           echo "Swift files: $(find . -name "*.swift" -not -path "./.git/*" | wc -l)"
           echo ""
           echo "Line count:"
