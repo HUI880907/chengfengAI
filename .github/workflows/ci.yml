@@ -30,35 +30,36 @@ jobs:
           echo ""
           echo "--- Current dir ---"
           pwd
-          echo ""
-          echo "--- Top-level items ---"
-          ls -la
 
-      - name: Copy Swift sources to plain dir
+      - name: Copy Swift sources to src/
         run: |
           mkdir -p src
-          echo "Searching for .swift files..."
-          COUNT=0
+          echo "=== Swift source files ==="
+          FILES=()
           while IFS= read -r -d '' file; do
-            cp "$file" src/
-            COUNT=$((COUNT + 1))
-          done < <(find . -path "./.git" -prune -o -name "*.swift" -not -path "*/Tests/*" -not -path "*/Tests*" -print0)
-          echo "Copied $COUNT .swift files to src/"
-          echo ""
-          echo "--- src/ contents ---"
-          ls -la src/ | head -40
-          echo ""
-          echo "Total in src:"
-          ls src/ | wc -l
+            fname=$(basename "$file")
+            if [ "$fname" = "Package.swift" ]; then
+              echo "  SKIP (Package.swift): $file"
+              continue
+            fi
+            cp "$file" "src/$fname"
+            FILES+=("$fname")
+            echo "  OK: $file -> src/$fname"
+          done < <(find . -name "*.swift" -not -path "*/Tests/*" -not -path "./.git/*" -print0)
 
-      - name: Compile iOS arm64 binary with swiftc
+          echo ""
+          echo "Total copied: ${#FILES[@]}"
+          echo ""
+          echo "=== src/ listing ==="
+          ls -1 src/ | sort
+
+      - name: Compile iOS arm64 binary
         run: |
           SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path)
           echo "SDK: $SDK_PATH"
           echo ""
-          echo "Compiling $(ls src/*.swift | wc -l | tr -d ' ') files for arm64-apple-ios16.0..."
-          echo ""
 
+          set +e
           xcrun --sdk iphoneos swiftc \
             -target arm64-apple-ios16.0 \
             -sdk "$SDK_PATH" \
@@ -71,14 +72,24 @@ jobs:
             -framework Network \
             -framework CoreGraphics \
             -o chengfengai \
-            src/*.swift 2>&1 | tail -250
+            src/*.swift > /tmp/compile.log 2>&1
+          RC=$?
+          set -e
 
-          RC=${PIPESTATUS[0]}
           echo ""
+          echo "=== Compilation output (last 300 lines) ==="
+          tail -300 /tmp/compile.log
+          echo ""
+
           if [ $RC -ne 0 ]; then
+            echo ""
+            echo "=== Full compilation output ==="
+            cat /tmp/compile.log
+            echo ""
             echo "FAILED: swiftc exit code $RC"
             exit $RC
           fi
+
           echo "SUCCESS: Compilation done"
           echo ""
           echo "Binary:"
