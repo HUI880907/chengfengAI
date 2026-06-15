@@ -1,4 +1,4 @@
-name: ChengFengAI - iOS IPA Auto Build
+name: ChengFengAI - iOS IPA Build
 
 on:
   push:
@@ -26,78 +26,71 @@ jobs:
           echo "--- Xcode ---"
           xcodebuild -version
           echo ""
-          echo "--- iOS SDK ---"
-          xcrun --sdk iphoneos --show-sdk-version
-          echo ""
           echo "--- XcodeGen ---"
-          brew install xcodegen || true
-          xcodegen --version 2>/dev/null || echo "(installed via brew)"
-          echo ""
-          echo "--- Current dir ---"
-          pwd
-          echo ""
-          echo "--- Project structure ---"
-          ls -la
-          echo ""
-          echo "--- 乘风AI sources ---"
-          find "乘风AI" -name "*.swift" | head -20
-          echo ""
-          echo "Total Swift files: $(find "乘风AI" -name "*.swift" | wc -l | tr -d ' ')"
+          brew install xcodegen 2>/dev/null || true
+          xcodegen --version 2>/dev/null || echo "(installed)"
 
-      - name: Generate Xcode project with XcodeGen
+      - name: Generate Xcode project
         run: |
-          echo "=== Generating Xcode project ==="
+          echo "=== Running XcodeGen ==="
           xcodegen generate --spec project.yml
           echo ""
           echo "=== Project files ==="
-          ls -la *.xcodeproj 2>/dev/null || echo "(no xcodeproj found)"
-          echo ""
-          echo "=== Project targets ==="
-          xcodebuild -list -project "乘风AI.xcodeproj" 2>/dev/null || echo "(xcodebuild list failed)"
+          ls -la *.xcodeproj/ 2>/dev/null || echo "(WARNING: no xcodeproj generated)"
 
-      - name: Archive iOS app
+      - name: Build iOS app (Release, simulator-free)
         run: |
-          echo "=== Archiving iOS app ==="
+          echo "=== Building for iOS devices (arm64) ==="
           xcodebuild \
             -project "乘风AI.xcodeproj" \
             -scheme "乘风AI" \
-            -sdk iphoneos \
             -configuration Release \
+            -sdk iphoneos \
             -destination "generic/platform=iOS" \
-            -archivePath "$PWD/build/ChengFengAI.xcarchive" \
-            archive \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             DEVELOPMENT_TEAM="" \
-            PROVISIONING_PROFILE="" \
-            2>&1 | tail -100
+            ONLY_ACTIVE_ARCH=NO \
+            ARCHS="arm64" \
+            ENABLE_BITCODE=NO \
+            STRIP_INSTALLED_PRODUCT=YES \
+            build \
+            2>&1 | tail -200
+          BUILD_RESULT=${PIPESTATUS[0]}
           echo ""
-          echo "=== Archive structure ==="
-          ls -la build/ 2>/dev/null || echo "(no build directory)"
+          echo "Build exit code: $BUILD_RESULT"
+          exit $BUILD_RESULT
 
-      - name: Build IPA from archive
+      - name: Locate .app and package IPA
         run: |
-          echo "=== Archive contents ==="
-          APP_DIR="build/ChengFengAI.xcarchive/Products/Applications"
-          ls -la "$APP_DIR/" 2>/dev/null
-          APP_PATH=$(ls -d "$APP_DIR"/*.app 2>/dev/null | head -1)
-          echo "App path: $APP_PATH"
-
+          echo "=== Looking for .app ==="
+          APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -name "乘风AI.app" -type d 2>/dev/null | head -1)
+          echo "Found: $APP_PATH"
+          if [ -z "$APP_PATH" ]; then
+            APP_PATH=$(find /Users/runner/Library/Developer/Xcode/DerivedData -name "ChengFengAI*.app" -type d 2>/dev/null | head -1)
+            echo "Alt found: $APP_PATH"
+          fi
+          if [ -z "$APP_PATH" ]; then
+            echo "ERROR: No .app found"
+            echo ""
+            echo "=== Try to find any .app ==="
+            find . -name "*.app" -type d 2>/dev/null | head -5
+            echo ""
+            echo "=== DerivedData contents ==="
+            ls -la ~/Library/Developer/Xcode/DerivedData/ 2>/dev/null || true
+            exit 1
+          fi
           echo ""
-          echo "=== Creating IPA (Payload structure) ==="
+          echo "=== Creating IPA ==="
           mkdir -p build/IPA/Payload
           cp -R "$APP_PATH" build/IPA/Payload/
-
-          echo ""
-          echo "=== Creating IPA zip ==="
           cd build/IPA
-          zip -r "ChengFengAI.ipa" Payload
+          zip -qr ChengFengAI.ipa Payload
           ls -lh
           cd ../..
-
           echo ""
-          echo "=== Final IPA ==="
+          echo "=== Final IPA size ==="
           ls -lh build/IPA/ChengFengAI.ipa
 
       - name: Upload IPA artifact
