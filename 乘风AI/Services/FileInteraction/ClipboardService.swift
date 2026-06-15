@@ -22,8 +22,8 @@ class ClipboardService: ObservableObject {
 
     // MARK: - 内部属性
 
-    /// 定时轮询剪贴板的计时器
-    private var monitorTimer: Timer?
+    /// 定时轮询剪贴板的计时器（nonisolated 以便 deinit 可访问）
+    nonisolated(unsafe) private var monitorTimer: Timer?
 
     /// 上一次检测到的文本哈希，避免将重复内容视为新内容
     private var lastTextHash: Int = 0
@@ -114,6 +114,7 @@ class ClipboardService: ObservableObject {
     }
 
     deinit {
-        stopMonitoring()
+        monitorTimer?.invalidate()
+        monitorTimer = nil
     }
 }
