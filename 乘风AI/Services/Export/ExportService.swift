@@ -89,6 +89,7 @@ class ExportService {
     /// - Parameters:
     ///   - view: 需要渲染的 SwiftUI 视图
     ///   - completion: 渲染完成回调，返回 UIImage（可选）
+    @MainActor
     func exportToScreenshot<Content: View>(view: Content,
                                            completion: @escaping (UIImage?) -> Void) {
         if #available(iOS 16.0, *) {
