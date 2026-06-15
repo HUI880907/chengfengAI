@@ -1,11 +1,13 @@
 import Foundation
+import SwiftUI
+import Combine
 
 // MARK: - 快捷提问提示服务
 // 根据剪贴板内容自动生成"最合适的提问入口"，减少用户输入成本
 
 /// 快捷提示服务
 @MainActor
-class QuickPromptService {
+class QuickPromptService: ObservableObject {
 
     // MARK: - 初始化
 
