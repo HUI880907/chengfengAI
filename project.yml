@@ -74,6 +74,12 @@ targets:
         UILaunchScreen: {}
         LSRequiresIPhoneOS: true
 
+    buildRules: []
+    dependencies: []
+    preBuildScripts: []
+    postCompileScripts: []
+    postBuildScripts: []
+
 schemes:
   乘风AI:
     build:

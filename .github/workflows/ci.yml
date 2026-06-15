@@ -26,18 +26,12 @@ jobs:
           echo "=== Xcode ==="
           xcodebuild -version
           echo ""
-          echo "=== Swift ==="
-          swift --version
+          echo "=== Available simulators (first 20) ==="
+          xcrun simctl list devices available 2>&1 | head -30
           echo ""
           echo "=== XcodeGen ==="
           brew list xcodegen 2>/dev/null || brew install xcodegen 2>&1 | tail -5
           xcodegen --version 2>/dev/null || echo "(installing)"
-          echo ""
-          echo "=== Project files ==="
-          ls -la *.yml *.yaml 2>/dev/null || true
-          echo ""
-          echo "=== Swift source files ==="
-          find . -name "*.swift" -not -path "*/.build/*" -not -path "*/.git/*" | wc -l
 
       - name: Generate Xcode project
         run: |
@@ -58,46 +52,50 @@ jobs:
             -scheme "乘风AI" \
             -configuration Debug \
             -sdk iphonesimulator \
-            -destination 'platform=iOS Simulator,name=iPhone 15' \
+            -destination 'platform=iOS Simulator,name=iPhone 17' \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             build \
-            2>&1 | tail -100
+            2>&1 | tail -80
 
-      - name: Archive for iOS devices (arm64)
+      - name: Build for iOS device (arm64)
         run: |
-          echo "=== Archiving iOS app ==="
+          echo "=== Building iOS app (arm64) ==="
           xcodebuild \
             -project "乘风AI.xcodeproj" \
             -scheme "乘风AI" \
             -configuration Release \
             -sdk iphoneos \
-            -destination "generic/platform=iOS" \
+            -derivedDataPath "$PWD/build/dd" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_ENTITLEMENTS="" \
             DEVELOPMENT_TEAM="" \
+            PROVISIONING_PROFILE="" \
+            PROVISIONING_PROFILE_SPECIFIER="" \
             ONLY_ACTIVE_ARCH=NO \
             ARCHS="arm64" \
             ENABLE_BITCODE=NO \
-            -archivePath "$PWD/build/ChengFengAI.xcarchive" \
-            archive \
-            2>&1 | tail -100
+            build \
+            2>&1 | tail -120
           echo ""
-          echo "=== Archive structure ==="
-          ls -la build/ 2>/dev/null || echo "(no build dir)"
-          ls -la build/ChengFengAI.xcarchive/ 2>/dev/null || echo "(no xcarchive)"
+          echo "=== Build output structure ==="
+          find build/dd -name "*.app" -type d 2>/dev/null || echo "(no .app found)"
 
       - name: Locate .app and package IPA
         run: |
-          echo "=== Looking for .app in archive ==="
-          APP_PATH=$(find build/ChengFengAI.xcarchive/Products/Applications -name "*.app" -type d 2>/dev/null | head -1)
+          echo "=== Looking for .app ==="
+          APP_PATH=$(find build/dd -name "*.app" -type d 2>/dev/null | grep -v ".dSYM" | head -1)
           echo "Found: $APP_PATH"
           if [ -z "$APP_PATH" ]; then
-            echo "ERROR: No .app found in archive"
+            echo "ERROR: No .app found"
             echo ""
-            echo "=== Searching anywhere for .app ==="
+            echo "=== Searching anywhere ==="
             find . -name "*.app" -type d 2>/dev/null | head -10
+            echo ""
+            echo "=== Build dir contents ==="
+            ls -la build/ 2>/dev/null || echo "(no build dir)"
             exit 1
           fi
           echo ""
@@ -120,6 +118,7 @@ jobs:
           if-no-files-found: error
 
       - name: Attest build provenance
+        if: success()
         uses: actions/attest-build-provenance@v1
         with:
           subject-path: build/IPA/ChengFengAI.ipa
