@@ -131,4 +131,24 @@ class ConversationStore: ObservableObject {
     func selectConversation(_ conversation: Conversation?) {
         activeConversation = conversation
     }
+
+    /// 向当前激活对话的最后一条用户消息添加附件；若不存在用户消息则创建新消息
+    /// - Parameter attachment: 要添加的附件
+    func appendAttachment(_ attachment: Attachment) {
+        var conversation = activeConversation ?? createConversation(title: "新对话")
+
+        if let index = conversation.messages.lastIndex(where: { $0.role == .user }) {
+            var message = conversation.messages[index]
+            if message.attachments == nil {
+                message.attachments = [attachment]
+            } else {
+                message.attachments?.append(attachment)
+            }
+            conversation.messages[index] = message
+        } else {
+            conversation.appendMessage(Message(role: .user, content: "", attachments: [attachment]))
+        }
+
+        updateConversation(conversation)
+    }
 }
