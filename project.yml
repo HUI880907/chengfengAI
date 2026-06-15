@@ -1,4 +1,4 @@
-name: 乘风AI
+name: ChengFengAI
 options:
   bundleIdPrefix: com.chengfeng
   deploymentTarget:
@@ -32,7 +32,7 @@ configs:
     type: release
 
 targets:
-  乘风AI:
+  ChengFengAI:
     type: application
     platform: iOS
     deploymentTarget: "16.0"
@@ -47,7 +47,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.chengfeng.ai
-        PRODUCT_NAME: "乘风AI"
+        PRODUCT_NAME: "ChengFengAI"
         IPHONEOS_DEPLOYMENT_TARGET: "16.0"
         TARGETED_DEVICE_FAMILY: "1,2"
         ARCHS: "$(ARCHS_STANDARD)"
@@ -68,7 +68,7 @@ targets:
       path: 乘风AI/Info.plist
       properties:
         CFBundleDisplayName: "乘风AI"
-        CFBundleName: "乘风AI"
+        CFBundleName: "ChengFengAI"
         CFBundleShortVersionString: "1.0.0"
         CFBundleVersion: "1"
         UILaunchScreen: {}
@@ -81,10 +81,10 @@ targets:
     postBuildScripts: []
 
 schemes:
-  乘风AI:
+  ChengFengAI:
     build:
       targets:
-        乘风AI: all
+        ChengFengAI: all
     test:
       config: Debug
       gatherCoverageData: true
@@ -97,7 +97,7 @@ schemes:
       config: Debug
     archive:
       config: Release
-      customArchiveName: "乘风AI"
+      customArchiveName: "ChengFengAI"
       revealArchiveInOrganizer: true
 
 groups:

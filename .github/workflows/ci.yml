@@ -39,17 +39,17 @@ jobs:
           xcodegen generate --spec project.yml 2>&1
           echo ""
           echo "=== Generated project contents ==="
-          ls -la "乘风AI.xcodeproj" 2>/dev/null || echo "(no xcodeproj found)"
+          ls -la "ChengFengAI.xcodeproj" 2>/dev/null || echo "(no xcodeproj found)"
           echo ""
           echo "=== Project targets ==="
-          xcodebuild -list -project "乘风AI.xcodeproj" 2>&1 | head -30
+          xcodebuild -list -project "ChengFengAI.xcodeproj" 2>&1 | head -30
 
       - name: Build for iOS simulator (syntax check + validation)
         run: |
           echo "=== Building for simulator (syntax validation) ==="
           xcodebuild \
-            -project "乘风AI.xcodeproj" \
-            -scheme "乘风AI" \
+            -project "ChengFengAI.xcodeproj" \
+            -scheme "ChengFengAI" \
             -configuration Debug \
             -sdk iphonesimulator \
             -destination 'platform=iOS Simulator,name=iPhone 17' \
@@ -62,8 +62,8 @@ jobs:
         run: |
           echo "=== Building iOS app (arm64) ==="
           xcodebuild \
-            -project "乘风AI.xcodeproj" \
-            -scheme "乘风AI" \
+            -project "ChengFengAI.xcodeproj" \
+            -scheme "ChengFengAI" \
             -configuration Release \
             -sdk iphoneos \
             -derivedDataPath "$PWD/build/dd" \
