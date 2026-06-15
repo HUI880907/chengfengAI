@@ -151,4 +151,12 @@ class ConversationStore: ObservableObject {
 
         updateConversation(conversation)
     }
+
+    /// 向当前激活对话追加一条消息
+    /// - Parameter message: 要追加的消息
+    func appendMessage(_ message: Message) {
+        var conversation = activeConversation ?? createConversation(title: "新对话")
+        conversation.appendMessage(message)
+        updateConversation(conversation)
+    }
 }

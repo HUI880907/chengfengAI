@@ -106,17 +106,17 @@ struct ChatInputBarView: View {
 
         // 异步请求模型回复
         Task {
-            do {
-                let messages = conversationStore.activeConversation?.messages ?? []
-                let response = try await modelScheduler.sendToModel(messages: messages)
-                let assistantMsg = Message(role: .assistant, content: response)
-                await MainActor.run {
-                    conversationStore.appendMessage(assistantMsg)
-                }
-            } catch {
-                await MainActor.run {
-                    let errorMsg = Message(role: .assistant, content: "出错: \(error.localizedDescription)")
-                    conversationStore.appendMessage(errorMsg)
+            let messages = conversationStore.activeConversation?.messages ?? []
+            await modelScheduler.sendToModel(messages: messages) { result in
+                Task { @MainActor in
+                    switch result {
+                    case .success(let response):
+                        let assistantMsg = Message(role: .assistant, content: response)
+                        conversationStore.appendMessage(assistantMsg)
+                    case .failure(let error):
+                        let errorMsg = Message(role: .assistant, content: "出错: \(error.localizedDescription)")
+                        conversationStore.appendMessage(errorMsg)
+                    }
                 }
             }
         }
