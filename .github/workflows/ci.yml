@@ -9,6 +9,10 @@ jobs:
   build-ipa:
     name: Build iOS IPA
     runs-on: macos-15
+    permissions:
+      id-token: write
+      attestations: write
+      contents: read
     steps:
 
       - name: Checkout source
@@ -102,3 +106,8 @@ jobs:
           name: ChengFengAI-iOS-IPA
           path: build/IPA/ChengFengAI.ipa
           if-no-files-found: error
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: build/IPA/ChengFengAI.ipa
