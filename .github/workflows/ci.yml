@@ -1,23 +1,13 @@
-name: 乘风AI - IPA 自动打包
+name: 乘风AI - IPA 自动打包 (swiftc 直编)
 
-# 触发条件：任何推送都触发
 on:
   push:
     branches: [ main, master, develop ]
   workflow_dispatch:
 
-# 环境变量
-env:
-  PROJECT_NAME: "ChengFengAI"
-  SOURCE_DIR: "乘风AI"
-  SCHEME: "乘风AI"
-
-# Job 定义
 jobs:
-
-  # ============ 核心：直接打包 IPA（最可靠的方式） ============
   build-ipa:
-    name: 生成 IPA (可侧装 iPhone)
+    name: 生成可侧装 iOS IPA
     runs-on: macos-15
     steps:
 
@@ -25,148 +15,179 @@ jobs:
       - name: 📥 检出代码
         uses: actions/checkout@v4
 
-      # --- 2. 检查环境 ---
-      - name: 🔍 检查 Xcode 和 SDK
+      # --- 2. 系统/SDK 检查 ---
+      - name: 🔍 检查系统和 iOS SDK
         run: |
+          echo "=== macOS 版本 ==="
+          sw_vers
+          echo ""
           echo "=== Xcode 版本 ==="
           xcodebuild -version
           echo ""
-          echo "=== 可用 iOS SDK ==="
-          xcodebuild -showsdks 2>&1 | grep -i "ios" || true
+          echo "=== 可用 SDK ==="
+          xcodebuild -showsdks 2>&1 | grep -i ios
           echo ""
-          echo "=== 可用模拟器 ==="
-          xcrun simctl list devices available 2>&1 | head -5 || true
+          echo "=== iPhoneOS SDK 路径 ==="
+          xcrun --sdk iphoneos --show-sdk-path
+          echo ""
+          echo "=== swiftc 版本 ==="
+          swiftc --version | head -3
 
-      # --- 3. 安装 xcodegen ---
-      - name: 🛠️ 安装 XcodeGen
+      # --- 3. 检查源码 ---
+      - name: 📂 检查项目源码
         run: |
-          brew install xcodegen
-          xcodegen --version
+          echo "=== 工作目录 ==="
+          pwd
+          echo ""
+          echo "=== 目录结构（前 30 行） ==="
+          find . -not -path "./.git/*" -not -name ".*" | sort | head -40
+          echo ""
+          echo "=== Swift 源文件 ==="
+          find . -name "*.swift" -not -path "./.git/*" | sort
+          echo ""
+          echo "=== Swift 文件总数 ==="
+          find . -name "*.swift" -not -path "./.git/*" | wc -l
 
-      # --- 4. 生成 Xcode 项目 ---
-      - name: 📋 生成 Xcode 项目
+      # --- 4. 交叉编译 arm64 真机二进制 ---
+      - name: ⚙️ 交叉编译 iOS arm64 可执行文件
         run: |
-          echo "=== 生成前文件列表 ==="
-          ls -la
-          echo ""
-          xcodegen generate --spec project.yml
-          echo ""
-          echo "=== 生成后项目文件 ==="
-          ls -la *.xcodeproj 2>&1 || echo "(未找到 .xcodeproj)"
+          SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path)
+          echo "✓ SDK 路径: $SDK_PATH"
 
-      # --- 5. 验证项目 ---
-      - name: ✅ 验证 scheme 和 target
-        run: |
-          echo "=== 项目 targets ==="
-          xcodebuild -list -project "${{ env.SOURCE_DIR }}.xcodeproj" 2>&1 || true
-          echo ""
-          echo "=== 项目 schemes ==="
-          xcodebuild -list -project "${{ env.SOURCE_DIR }}.xcodeproj" 2>&1 | grep -A 20 "Schemes:" || true
+          # 收集所有 Swift 源文件
+          SWIFT_SOURCES=$(find "乘风AI" -name "*.swift" -type f | sort | tr '\n' ' ')
+          SOURCE_COUNT=$(find "乘风AI" -name "*.swift" -type f | wc -l | tr -d ' ')
+          echo "✓ 找到 Swift 源文件: $SOURCE_COUNT 个"
 
-      # --- 6. 真机 Archive（iphoneos SDK，不签名） ---
-      - name: 📦 真机 Archive (Release)
-        run: |
-          mkdir -p build-output
-          xcodebuild \
-            -project "${{ env.SOURCE_DIR }}.xcodeproj" \
-            -scheme "${{ env.SCHEME }}" \
-            -configuration Release \
-            -sdk iphoneos \
-            -archivePath "build-output/${{ env.SOURCE_DIR }}.xcarchive" \
-            -derivedDataPath "build-output/derived" \
-            clean archive \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY="" \
-            ENABLE_HARDENED_RUNTIME=NO \
-            DEVELOPMENT_TEAM="" \
-            2>&1 | tail -80
-          EXIT_CODE=${PIPESTATUS[0]}
-          echo ""
-          echo "=== Archive 退出码: $EXIT_CODE ==="
-          echo ""
-          echo "=== Archive 产物检查 ==="
-          ls -la "build-output/" 2>&1 || true
-          if [ -d "build-output/${{ env.SOURCE_DIR }}.xcarchive" ]; then
-            echo "✓ .xcarchive 存在"
-            echo "=== Archive 内容 ==="
-            ls -la "build-output/${{ env.SOURCE_DIR }}.xcarchive/" 2>&1 || true
-            if [ -d "build-output/${{ env.SOURCE_DIR }}.xcarchive/Products/Applications" ]; then
-              echo "✓ Products/Applications 存在"
-              APP_COUNT=$(ls "build-output/${{ env.SOURCE_DIR }}.xcarchive/Products/Applications/" 2>&1 | wc -l | tr -d ' ')
-              echo "  App 数量: $APP_COUNT"
-            else
-              echo "✗ Products/Applications 不存在"
-            fi
-          else
-            echo "✗ .xcarchive 不存在"
-          fi
-          exit $EXIT_CODE
-
-      # --- 7. 从 Archive 提取 .app 并打包成 IPA ---
-      - name: 📲 打包 IPA (Payload 方式，无需开发者账号)
-        run: |
-          XCARCHIVE="build-output/${{ env.SOURCE_DIR }}.xcarchive"
-          APP_PATH=""
-          # 查找 .app
-          if [ -d "$XCARCHIVE/Products/Applications" ]; then
-            for app in "$XCARCHIVE/Products/Applications/"*.app; do
-              if [ -d "$app" ]; then
-                APP_PATH="$app"
-                break
-              fi
-            done
-          fi
-          if [ -z "$APP_PATH" ]; then
-            echo "ERROR: 未在 Archive 中找到 .app"
-            echo "=== 完整目录树 ==="
-            find "$XCARCHIVE" -maxdepth 4 -type d 2>&1 | head -50 || true
+          if [ "$SOURCE_COUNT" -eq 0 ]; then
+            echo "✗ 没有找到 Swift 源文件！"
             exit 1
           fi
-          echo "✓ 找到 App: $(basename "$APP_PATH")"
 
-          # 构建 Payload 目录 → IPA
-          mkdir -p build-ipa/Payload
-          cp -R "$APP_PATH" "build-ipa/Payload/"
-          echo "✓ 已复制到 Payload"
+          # 用 swiftc 交叉编译 arm64-apple-ios
+          echo "→ 开始编译 (可能需要 1-3 分钟)..."
+          xcrun --sdk iphoneos swiftc \
+            -target arm64-apple-ios16.0 \
+            -sdk "$SDK_PATH" \
+            -I "$SDK_PATH/usr/lib/swift" \
+            -F "$SDK_PATH/System/Library/Frameworks" \
+            -framework SwiftUI \
+            -framework Foundation \
+            -framework UIKit \
+            -framework Combine \
+            -framework CoreGraphics \
+            -framework Speech \
+            -o chengfengai \
+            $SWIFT_SOURCES 2>&1 | tail -100
 
-          # 检查并确保可执行权限
-          APP_NAME=$(basename "$APP_PATH")
-          EXEC_NAME=$(/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "build-ipa/Payload/$APP_NAME/Info.plist" 2>/dev/null || echo "${{ env.SOURCE_DIR }}")
-          chmod +x "build-ipa/Payload/$APP_NAME/$EXEC_NAME" 2>/dev/null || true
-          echo "✓ 可执行文件: $EXEC_NAME"
+          BUILD_EXIT=${PIPESTATUS[0]}
 
-          # ZIP 压缩 = IPA
-          cd build-ipa && zip -qr "${{ env.PROJECT_NAME }}.ipa" . && cd ..
-          mkdir -p final-output
-          cp "build-ipa/${{ env.PROJECT_NAME }}.ipa" "final-output/${{ env.PROJECT_NAME }}.ipa"
-
-          SIZE=$(du -h "final-output/${{ env.PROJECT_NAME }}.ipa" | cut -f1)
           echo ""
-          echo "✅ IPA 生成成功：final-output/${{ env.PROJECT_NAME }}.ipa ($SIZE)"
-          echo ""
-          echo "=== IPA 结构检查 ==="
-          ls -lh "final-output/${{ env.PROJECT_NAME }}.ipa"
-          echo ""
-          echo "=== Payload 内容 ==="
-          unzip -l "final-output/${{ env.PROJECT_NAME }}.ipa" | head -20
+          if [ $BUILD_EXIT -ne 0 ]; then
+            echo "✗ 编译失败 (退出码: $BUILD_EXIT)"
+            exit $BUILD_EXIT
+          fi
 
-      # --- 8. 上传 IPA ---
-      - name: 📤 上传 IPA (可直接侧装 iPhone)
+          # 验证输出文件
+          echo "✓ 编译成功"
+          echo "  文件:"
+          ls -lh chengfengai
+          echo "  类型:"
+          file chengfengai
+
+      # --- 5. 组装 .app 应用包 ---
+      - name: 📦 组装 iOS 应用包 (.app)
+        run: |
+          APP_DIR="Payload/chengfengai.app"
+          mkdir -p "$APP_DIR"
+
+          # 复制可执行文件
+          cp chengfengai "$APP_DIR/chengfengai"
+          chmod +x "$APP_DIR/chengfengai"
+          echo "✓ 已复制可执行文件"
+
+          # 创建 Info.plist
+          cat > "$APP_DIR/Info.plist" << 'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>CFBundleDevelopmentRegion</key>
+            <string>zh_CN</string>
+            <key>CFBundleExecutable</key>
+            <string>chengfengai</string>
+            <key>CFBundleIdentifier</key>
+            <string>com.chengfeng.ai</string>
+            <key>CFBundleInfoDictionaryVersion</key>
+            <string>6.0</string>
+            <key>CFBundleName</key>
+            <string>乘风AI</string>
+            <key>CFBundleDisplayName</key>
+            <string>乘风AI</string>
+            <key>CFBundlePackageType</key>
+            <string>APPL</string>
+            <key>CFBundleShortVersionString</key>
+            <string>1.0.0</string>
+            <key>CFBundleVersion</key>
+            <string>1</string>
+            <key>LSRequiresIPhoneOS</key>
+            <true/>
+            <key>MinimumOSVersion</key>
+            <string>16.0</string>
+            <key>UIApplicationSupportsIndirectInputEvents</key>
+            <true/>
+            <key>UILaunchScreen</key>
+            <dict/>
+            <key>UIRequiredDeviceCapabilities</key>
+            <array>
+              <string>arm64</string>
+            </array>
+            <key>UISupportedInterfaceOrientations</key>
+            <array>
+              <string>UIInterfaceOrientationPortrait</string>
+              <string>UIInterfaceOrientationLandscapeLeft</string>
+              <string>UIInterfaceOrientationLandscapeRight</string>
+            </array>
+            <key>UISupportedInterfaceOrientations~ipad</key>
+            <array>
+              <string>UIInterfaceOrientationPortrait</string>
+              <string>UIInterfaceOrientationPortraitUpsideDown</string>
+              <string>UIInterfaceOrientationLandscapeLeft</string>
+              <string>UIInterfaceOrientationLandscapeRight</string>
+            </array>
+          </dict>
+          </plist>
+          PLIST
+          echo "✓ 已创建 Info.plist"
+
+          # 验证 .app 内容
+          echo ""
+          echo "=== .app 内容 ==="
+          ls -lh "$APP_DIR/"
+
+      # --- 6. 打包为 IPA ---
+      - name: 📲 压缩打包为 IPA
+        run: |
+          mkdir -p output
+          cd Payload/.. && zip -qr "output/chengfengai.ipa" Payload
+          
+          SIZE=$(du -h "output/chengfengai.ipa" | cut -f1)
+          echo "✓ IPA 生成成功"
+          echo "  文件: output/chengfengai.ipa"
+          echo "  大小: $SIZE"
+          echo ""
+          echo "=== IPA 结构 ==="
+          unzip -l "output/chengfengai.ipa" | head -20
+
+      # --- 7. 上传 IPA ---
+      - name: 📤 上传 IPA (可侧装到 iPhone)
         uses: actions/upload-artifact@v4
         with:
-          name: "ChengFengAI-iOS-IPA"
-          path: "final-output/*.ipa"
+          name: ChengFengAI-iOS-IPA
+          path: output/*.ipa
+          if-no-files-found: error
 
-      # --- 9. 上传 Archive 调试产物 ---
-      - name: 📤 上传 Archive (调试用)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: "ChengFengAI-iOS-Archive"
-          path: "build-output/*.xcarchive"
-
-  # ============ 代码统计（独立运行，不影响 IPA） ============
+  # 代码统计（独立 job，不影响 IPA 生成）
   stats:
     name: 代码统计
     runs-on: ubuntu-latest
@@ -178,10 +199,9 @@ jobs:
           echo "=== 乘风AI 项目统计 ==="
           echo ""
           echo "Swift 文件: $(find . -name "*.swift" -not -path "./.git/*" | wc -l) 个"
+          echo ""
           echo "Swift 代码行数:"
           find . -name "*.swift" -not -path "./.git/*" -exec wc -l {} + 2>&1 | tail -1
           echo ""
-          echo "YAML 配置: $(find . -name "*.yml" -not -path "./.git/*" | wc -l) 个"
-          echo ""
-          echo "=== 关键文件 ==="
+          echo "=== 文件结构 ==="
           find . -maxdepth 3 -type f -not -path "./.git/*" | sort | head -30
