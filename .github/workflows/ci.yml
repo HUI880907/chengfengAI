@@ -20,27 +20,53 @@ jobs:
 
       - name: Environment info
         run: |
-          echo "--- macOS ---"
+          echo "=== macOS ==="
           sw_vers
           echo ""
-          echo "--- Xcode ---"
+          echo "=== Xcode ==="
           xcodebuild -version
           echo ""
-          echo "--- XcodeGen ---"
-          brew install xcodegen 2>/dev/null || true
-          xcodegen --version 2>/dev/null || echo "(installed)"
+          echo "=== Swift ==="
+          swift --version
+          echo ""
+          echo "=== XcodeGen ==="
+          brew list xcodegen 2>/dev/null || brew install xcodegen 2>&1 | tail -5
+          xcodegen --version 2>/dev/null || echo "(installing)"
+          echo ""
+          echo "=== Project files ==="
+          ls -la *.yml *.yaml 2>/dev/null || true
+          echo ""
+          echo "=== Swift source files ==="
+          find . -name "*.swift" -not -path "*/.build/*" -not -path "*/.git/*" | wc -l
 
       - name: Generate Xcode project
         run: |
           echo "=== Running XcodeGen ==="
-          xcodegen generate --spec project.yml
+          xcodegen generate --spec project.yml 2>&1
           echo ""
-          echo "=== Project files ==="
-          ls -la *.xcodeproj/ 2>/dev/null || echo "(WARNING: no xcodeproj generated)"
+          echo "=== Generated project contents ==="
+          ls -la "乘风AI.xcodeproj" 2>/dev/null || echo "(no xcodeproj found)"
+          echo ""
+          echo "=== Project targets ==="
+          xcodebuild -list -project "乘风AI.xcodeproj" 2>&1 | head -30
 
-      - name: Build iOS app (Release, simulator-free)
+      - name: Build for iOS simulator (syntax check + validation)
         run: |
-          echo "=== Building for iOS devices (arm64) ==="
+          echo "=== Building for simulator (syntax validation) ==="
+          xcodebuild \
+            -project "乘风AI.xcodeproj" \
+            -scheme "乘风AI" \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'platform=iOS Simulator,name=iPhone 15' \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            build \
+            2>&1 | tail -100
+
+      - name: Archive for iOS devices (arm64)
+        run: |
+          echo "=== Archiving iOS app ==="
           xcodebuild \
             -project "乘风AI.xcodeproj" \
             -scheme "乘风AI" \
@@ -54,31 +80,24 @@ jobs:
             ONLY_ACTIVE_ARCH=NO \
             ARCHS="arm64" \
             ENABLE_BITCODE=NO \
-            STRIP_INSTALLED_PRODUCT=YES \
-            build \
-            2>&1 | tail -200
-          BUILD_RESULT=${PIPESTATUS[0]}
+            -archivePath "$PWD/build/ChengFengAI.xcarchive" \
+            archive \
+            2>&1 | tail -100
           echo ""
-          echo "Build exit code: $BUILD_RESULT"
-          exit $BUILD_RESULT
+          echo "=== Archive structure ==="
+          ls -la build/ 2>/dev/null || echo "(no build dir)"
+          ls -la build/ChengFengAI.xcarchive/ 2>/dev/null || echo "(no xcarchive)"
 
       - name: Locate .app and package IPA
         run: |
-          echo "=== Looking for .app ==="
-          APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -name "乘风AI.app" -type d 2>/dev/null | head -1)
+          echo "=== Looking for .app in archive ==="
+          APP_PATH=$(find build/ChengFengAI.xcarchive/Products/Applications -name "*.app" -type d 2>/dev/null | head -1)
           echo "Found: $APP_PATH"
           if [ -z "$APP_PATH" ]; then
-            APP_PATH=$(find /Users/runner/Library/Developer/Xcode/DerivedData -name "ChengFengAI*.app" -type d 2>/dev/null | head -1)
-            echo "Alt found: $APP_PATH"
-          fi
-          if [ -z "$APP_PATH" ]; then
-            echo "ERROR: No .app found"
+            echo "ERROR: No .app found in archive"
             echo ""
-            echo "=== Try to find any .app ==="
-            find . -name "*.app" -type d 2>/dev/null | head -5
-            echo ""
-            echo "=== DerivedData contents ==="
-            ls -la ~/Library/Developer/Xcode/DerivedData/ 2>/dev/null || true
+            echo "=== Searching anywhere for .app ==="
+            find . -name "*.app" -type d 2>/dev/null | head -10
             exit 1
           fi
           echo ""
