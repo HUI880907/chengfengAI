@@ -1,0 +1,155 @@
+# ========================================
+# XcodeGen 项目配置文件 - 乘风AI
+# 版本：XcodeGen 2.x
+# 使用方法：在 macOS 终端执行 `xcodegen generate`
+# ========================================
+
+# ---------- 项目基本信息 ----------
+name: 乘风AI
+options:
+  bundleIdPrefix: com.chengfeng
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+  groupSortPosition: none
+  fileSortOrder: byName
+  generateEmptyDirectories: false
+  useBaseInternationalization: false
+  xcodeVersion: "15.0"
+  tabWidth: 4
+  indentWidth: 4
+  swiftVersion: "5.9"
+  minimumXcodeGenVersion: "2.38.0"
+
+# ---------- 项目设置 ----------
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
+    ENABLE_BITCODE: false
+    GENERATE_INFOPLIST_FILE: NO
+    CODE_SIGN_STYLE: Automatic
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_IDENTITY: "Apple Development"
+    CODE_SIGNING_ALLOWED: YES
+    SWIFT_STRICT_CONCURRENCY: minimal
+    ENABLE_PREVIEWS: YES
+
+# ---------- 配置 ----------
+configs:
+  Debug:
+    type: debug
+  Release:
+    type: release
+
+# ---------- Targets 定义 ----------
+targets:
+  # ============ 主应用 ============
+  乘风AI:
+    type: application
+    platform: iOS
+    sources:
+      - path: 乘风AI
+        type: source
+        excludes:
+          - "**/*.md"
+          - "**/.DS_Store"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.chengfeng.ai
+        PRODUCT_NAME: "乘风AI"
+        IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SUPPORTED_INTERFACE_ORIENTATIONS_IPHONE: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        SUPPORTED_INTERFACE_ORIENTATIONS_IPAD: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        ARCHS: "$(ARCHS_STANDARD)"
+        ONLY_ACTIVE_ARCH: YES
+        SWIFT_COMPILATION_MODE: singlefile
+        SWIFT_OPTIMIZATION_LEVEL: "-Onone"
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "DEBUG $(inherited)"
+        SWIFT_TREAT_WARNINGS_AS_ERRORS: NO
+        GCC_TREAT_WARNINGS_AS_ERRORS: NO
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_IDENTITY: "Apple Development"
+        DEVELOPMENT_TEAM: ""
+        USER_INTERFACE_STYLE: Automatic
+        INFOPLIST_FILE: 乘风AI/Info.plist
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/Frameworks"
+        GENERATE_INFOPLIST_FILE: NO
+      configs:
+        Release:
+          SWIFT_COMPILATION_MODE: wholemodule
+          SWIFT_OPTIMIZATION_LEVEL: "-O"
+          ONLY_ACTIVE_ARCH: NO
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "RELEASE $(inherited)"
+          CODE_SIGN_IDENTITY: "Apple Distribution"
+    info:
+      path: 乘风AI/Info.plist
+      properties:
+        CFBundleDisplayName: "乘风AI"
+        CFBundleName: "乘风AI"
+        CFBundleShortVersionString: "1.0.0"
+        CFBundleVersion: "1"
+        MinimumOSVersion: "16.0"
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        NSCameraUsageDescription: "需要访问相机以拍摄图片"
+        NSPhotoLibraryUsageDescription: "需要访问相册以选择图片"
+        NSPhotoLibraryAddUsageDescription: "需要保存图片到相册"
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
+
+  # ============ 单元测试 ============
+  乘风AITests:
+    type: unit-tests
+    platform: iOS
+    sources:
+      - path: Tests
+        type: source
+        excludes:
+          - "**/*.md"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.chengfeng.ai.tests
+        PRODUCT_NAME: "乘风AITests"
+        IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+        SWIFT_VERSION: "5.9"
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/乘风AI.app/乘风AI"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/Frameworks @loader_path/Frameworks"
+    dependencies:
+      - target: 乘风AI
+
+# ---------- Schemes ----------
+schemes:
+  乘风AI:
+    build:
+      targets:
+        乘风AI: all
+        乘风AITests: [test, run]
+    test:
+      config: Debug
+      gatherCoverageData: true
+      targets:
+        - 乘风AITests
+    run:
+      config: Debug
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release
+      customArchiveName: "乘风AI"
+      revealArchiveInOrganizer: true
+
+# ---------- Groups ----------
+groups:
+  - 乘风AI
+  - Tests

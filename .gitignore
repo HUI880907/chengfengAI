@@ -1,0 +1,140 @@
+# ==============================
+# Xcode / 乘风AI 项目 .gitignore
+# 说明：iOS/Swift 项目标准忽略文件
+# ==============================
+
+# --- Xcode 用户数据 ---
+# 每个开发者自己的 Xcode 用户界面状态、窗口布局、断点等个人设置
+# 这些文件不应该提交到仓库
+*.xcuserstate
+*.xcuserdatad
+xcuserdata/
+.xcuserdata
+
+# Xcode 工作区用户目录（当使用 .xcworkspace 时）
+*.xcworkspace/xcuserdata/
+
+# --- Xcode 构建产物 ---
+# Xcode 的 DerivedData 目录（构建中间产物、缓存、索引）
+DerivedData/
+build/
+.build/
+*.build/
+
+# --- Swift Package Manager ---
+# SPM 构建产物目录
+.swiftpm/
+.swiftpm/xcode/
+
+# SPM 生成的 Xcode 项目（如果使用 `swift package generate-xcodeproj`）
+# 注意：本项目使用 XcodeGen 管理 .xcodeproj，
+#       所以 .xcodeproj 本身不应被忽略（由 XcodeGen 生成但建议不提交）
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+
+# --- CocoaPods ---
+# 如果未来使用 CocoaPods 依赖管理
+Pods/
+Podfile.lock
+
+# 由 CocoaPods 生成的工作区
+*.xcworkspace/contents.xcworkspacedata
+
+# --- Carthage ---
+# 如果未来使用 Carthage 依赖管理
+Carthage/Build/
+Carthage/Checkouts/
+
+# --- 编译产物 ---
+# 各类编译二进制文件
+*.o
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# --- 归档文件 ---
+# Xcode Archive 文件（打包产物）
+*.xcarchive
+*.ipa
+*.app
+*.app.dSYM
+
+# --- 框架/动态库 ---
+*.framework
+*.xcframework
+*.a
+*.dylib
+
+# --- 预览生成 ---
+# Xcode Previews 生成的临时文件
+*.previews-graph
+*.previews-thunks
+
+# --- macOS 系统文件 ---
+# macOS Finder 生成的元数据文件
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# --- 日志文件 ---
+# Xcode 构建日志和系统日志
+*.log
+*.xcactivitylog
+Logs/
+
+# --- 临时文件 ---
+# 各类编辑器和系统临时文件
+*~
+*.tmp
+*.temp
+*.bak
+*.swp
+Thumbs.db
+
+# --- Swift 编译缓存 ---
+# Swift 编译器的模块缓存
+ModuleCache/
+*.swiftmodule
+*.swiftdoc
+*.swiftinterface
+
+# --- 测试覆盖率报告 ---
+# 如使用 xcov 或其他覆盖率工具生成的报告
+coverage/
+*.xccovreport
+*.xccovarchive
+
+# --- 证书与签名配置（个人）---
+# 注意：通用 provisioning profile 和证书通常不建议提交到公开仓库
+# 但团队共享的 profile 可按需调整
+# *.mobileprovision
+# *.cer
+# *.p12
+
+# --- IDE 配置文件 ---
+# VS Code 等其他编辑器配置（按需保留或忽略）
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# --- XcodeGen 生成的项目文件 ---
+# 说明：由于 project.yml 是项目定义的单一来源，
+#       生成的 .xcodeproj 文件不应该被提交，
+#       团队成员通过 `xcodegen generate` 在本地生成。
+*.xcodeproj/
+!project.yml
+
+# --- 环境变量与本地配置 ---
+# 本地开发环境配置（可能包含敏感信息）
+.env
+.env.local
+*.xcconfig.local
+.xcconfig.local
+
+# --- 文档构建产物 ---
+# 如果使用 jazzy 或类似工具生成 API 文档
+docs/
+.build-docs/

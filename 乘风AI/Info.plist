@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- 应用显示名称 -->
+    <key>CFBundleDisplayName</key>
+    <string>乘风AI</string>
+
+    <!-- 应用短版本号 -->
+    <key>CFBundleShortVersionString</key>
+    <string>1.0.0</string>
+
+    <!-- 应用构建号 -->
+    <key>CFBundleVersion</key>
+    <string>1</string>
+
+    <!-- 最低系统版本要求 -->
+    <key>MinimumOSVersion</key>
+    <string>16.0</string>
+
+    <!-- 相机使用权限说明 -->
+    <key>NSCameraUsageDescription</key>
+    <string>需要访问相机以拍摄图片</string>
+
+    <!-- 相册读取权限说明 -->
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>需要访问相册以选择图片</string>
+
+    <!-- 相册写入权限说明 -->
+    <key>NSPhotoLibraryAddUsageDescription</key>
+    <string>需要保存图片到相册</string>
+
+    <!-- 启用文件共享（iTunes 文件共享） -->
+    <key>UIFileSharingEnabled</key>
+    <true/>
+
+    <!-- 支持在"文件"App 中打开文档 -->
+    <key>LSSupportsOpeningDocumentsInPlace</key>
+    <true/>
+
+    <!-- 启动屏幕配置（空字典表示使用 LaunchScreen.storyboard 或默认） -->
+    <key>UILaunchScreen</key>
+    <dict/>
+
+    <!-- 应用场景配置 -->
+    <key>UIApplicationSceneManifest</key>
+    <dict>
+        <key>UIApplicationSupportsMultipleScenes</key>
+        <false/>
+        <key>UISceneConfigurations</key>
+        <dict/>
+    </dict>
+
+    <!-- 支持的界面方向 -->
+    <key>UISupportedInterfaceOrientations</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+        <string>UIInterfaceOrientationLandscapeLeft</string>
+        <string>UIInterfaceOrientationLandscapeRight</string>
+    </array>
+
+    <!-- 状态栏样式 -->
+    <key>UIViewControllerBasedStatusBarAppearance</key>
+    <true/>
+</dict>
+</plist>
