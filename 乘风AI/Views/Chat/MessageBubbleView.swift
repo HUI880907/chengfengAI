@@ -183,26 +183,6 @@ struct MessageBubbleView: View {
     }
 }
 
-// MARK: - UIActivityViewController 封装（用于"分享"）
-
-/// 简单封装 UIActivityViewController 以便在 SwiftUI 中使用
-struct ActivityView: UIViewControllerRepresentable {
-    var activityItems: [Any]
-    var applicationActivities: [UIActivity]? = nil
-
-    func makeUIViewController(context: Context) -> UIActivityViewController {
-        let controller = UIActivityViewController(
-            activityItems: activityItems,
-            applicationActivities: applicationActivities
-        )
-        return controller
-    }
-
-    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {
-        // 无需更新
-    }
-}
-
 #Preview {
     VStack {
         MessageBubbleView(message: Message(role: .user, content: "你好，这是一段测试消息"))
