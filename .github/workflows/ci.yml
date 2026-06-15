@@ -14,40 +14,25 @@ jobs:
       attestations: write
       contents: read
     steps:
-
       - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Environment info
+      - name: Install tools
         run: |
-          echo "=== macOS ==="
-          sw_vers
-          echo ""
-          echo "=== Xcode ==="
-          xcodebuild -version
-          echo ""
-          echo "=== XcodeGen ==="
-          brew list xcodegen 2>/dev/null || brew install xcodegen 2>&1 | tail -5
-          xcodegen --version 2>/dev/null || echo "(installing)"
-          echo ""
-          echo "=== codesign tool ==="
-          which codesign
-          codesign --version 2>&1 || true
+          echo "=== Checking xcodegen ==="
+          xcodegen --version 2>&1 || (brew install xcodegen 2>&1 | tail -5)
+          echo "=== Checking codesign ==="
+          codesign --help 2>&1 | head -3 || true
+          echo "=== Checking ldid ==="
+          ldid 2>&1 | head -3 || (brew install ldid 2>&1 | tail -5)
 
       - name: Generate Xcode project
         run: |
-          echo "=== Running XcodeGen ==="
           xcodegen generate --spec project.yml 2>&1
-          echo ""
-          echo "=== Generated project contents ==="
-          ls -la "ChengFengAI.xcodeproj" 2>/dev/null || echo "(no xcodeproj found)"
-          echo ""
-          echo "=== Project targets ==="
-          xcodebuild -list -project "ChengFengAI.xcodeproj" 2>&1 | head -30
+          ls -la "ChengFengAI.xcodeproj" 2>/dev/null || echo "(no project file!)"
 
-      - name: Build for iOS simulator (syntax check)
+      - name: Build for iOS simulator (syntax validation)
         run: |
-          echo "=== Building for simulator (syntax validation) ==="
           xcodebuild \
             -project "ChengFengAI.xcodeproj" \
             -scheme "ChengFengAI" \
@@ -57,11 +42,10 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             build \
-            2>&1 | tail -50
+            2>&1 | tail -30
 
-      - name: Build for iOS device (arm64) + ad-hoc sign
+      - name: Build for iOS device (arm64, no signing at build time)
         run: |
-          echo "=== Building iOS app (arm64) — signing disabled during build ==="
           xcodebuild \
             -project "ChengFengAI.xcodeproj" \
             -scheme "ChengFengAI" \
@@ -74,111 +58,81 @@ jobs:
             ARCHS="arm64" \
             ENABLE_BITCODE=NO \
             build \
-            2>&1 | tail -120
+            2>&1 | tail -40
 
-          echo ""
-          echo "=== Locate .app ==="
-          APP_PATH=$(find build/dd -name "*.app" -type d 2>/dev/null | grep -v ".dSYM" | head -1)
-          echo "Found: $APP_PATH"
-          if [ -z "$APP_PATH" ]; then
-            echo "ERROR: No .app found"
-            find build/dd -type d 2>/dev/null | head -30
-            exit 1
-          fi
+          APP_PATH=$(find build/dd -name "*.app" -type d 2>/dev/null | grep -v "\.dSYM" | head -1)
+          echo "APP_PATH=${APP_PATH}" >> $GITHUB_ENV
+          echo "Found: ${APP_PATH}"
 
-          echo ""
+      - name: Verify .app structure and Info.plist
+        run: |
+          APP_PATH="${{ env.APP_PATH }}"
           echo "=== .app contents ==="
-          ls -la "$APP_PATH/"
-
+          ls -la "${APP_PATH}/"
           echo ""
-          echo "=== .app binary (executable) ==="
-          EXEC_NAME=$(plutil -extract CFBundleExecutable raw -o - "$APP_PATH/Info.plist" 2>/dev/null || echo "ChengFengAI")
-          echo "Executable name: $EXEC_NAME"
-          if [ -f "$APP_PATH/$EXEC_NAME" ]; then
-            file "$APP_PATH/$EXEC_NAME"
+          echo "=== Info.plist ==="
+          plutil -p "${APP_PATH}/Info.plist" 2>&1
+          echo ""
+          echo "=== Binary check ==="
+          EXEC_NAME=$(plutil -extract CFBundleExecutable raw -o - "${APP_PATH}/Info.plist" 2>/dev/null || echo "ChengFengAI")
+          echo "Executable name from plist: ${EXEC_NAME}"
+          if [ -f "${APP_PATH}/${EXEC_NAME}" ]; then
+            file "${APP_PATH}/${EXEC_NAME}"
           else
-            echo "WARNING: Executable $EXEC_NAME not found!"
-            ls "$APP_PATH/"
+            echo "WARNING: executable '${EXEC_NAME}' NOT found at ${APP_PATH}/${EXEC_NAME}!"
           fi
 
+      - name: Ad-hoc sign with codesign
+        run: |
+          APP_PATH="${{ env.APP_PATH }}"
+          echo "=== codesign --force --deep --sign - ==="
+          codesign --force --deep --sign - "${APP_PATH}" 2>&1
+          echo "Exit: $?"
           echo ""
-          echo "=== Info.plist dump ==="
-          plutil -p "$APP_PATH/Info.plist" 2>&1 | head -30
-
+          echo "=== Verify signature ==="
+          codesign -dv "${APP_PATH}" 2>&1 || echo "(verify skipped)"
           echo ""
-          echo "=== Force ad-hoc sign with codesign ==="
-          codesign --force --deep --sign - "$APP_PATH" 2>&1
-          CS_RESULT=$?
-          echo "codesign result: $CS_RESULT"
+          echo "=== _CodeSignature after signing ==="
+          ls -la "${APP_PATH}/_CodeSignature/" 2>/dev/null || echo "(no _CodeSignature dir)"
 
-          if [ $CS_RESULT -ne 0 ]; then
-            echo ""
-            echo "=== Fallback: using ldid for pseudo-signing ==="
-            brew list ldid 2>/dev/null || brew install ldid 2>&1 | tail -3
-            EXEC_FILE="$APP_PATH/$EXEC_NAME"
-            if [ -f "$EXEC_FILE" ]; then
-              ldid -S "$EXEC_FILE" 2>&1
+      - name: Fallback sign with ldid (if codesign left no signature)
+        run: |
+          APP_PATH="${{ env.APP_PATH }}"
+          if [ -d "${APP_PATH}/_CodeSignature" ]; then
+            echo "_CodeSignature exists, skipping ldid fallback"
+          else
+            echo "=== ldid -S fallback ==="
+            EXEC_NAME=$(plutil -extract CFBundleExecutable raw -o - "${APP_PATH}/Info.plist" 2>/dev/null || echo "ChengFengAI")
+            if [ -f "${APP_PATH}/${EXEC_NAME}" ]; then
+              ldid -S "${APP_PATH}/${EXEC_NAME}" 2>&1
               echo "ldid result: $?"
             fi
           fi
 
-          echo ""
-          echo "=== Verify signature ==="
-          codesign -dv "$APP_PATH" 2>&1 || echo "(codesign verify skipped)"
-
-          echo ""
-          echo "=== Ensure _CodeSignature exists ==="
-          if [ ! -d "$APP_PATH/_CodeSignature" ]; then
-            echo "(no _CodeSignature found — creating minimal plist)"
-            mkdir -p "$APP_PATH/_CodeSignature"
-            cat > "$APP_PATH/_CodeSignature/CodeResources" <<'PLIST_EOF'
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict></dict></plist>
-PLIST_EOF
-          fi
-          ls -la "$APP_PATH/_CodeSignature/" 2>/dev/null
-
-          echo ""
-          echo "=== Create PkgInfo ==="
-          printf 'APPL????' > "$APP_PATH/PkgInfo"
-          ls -la "$APP_PATH/PkgInfo"
-
-          echo ""
-          echo "=== Final .app structure summary ==="
-          echo "--- top level ---"
-          ls -la "$APP_PATH/"
-          echo ""
-          echo "--- file sizes ---"
-          du -h "$APP_PATH" 2>/dev/null
-
-          echo ""
-          echo "APP_PATH=$APP_PATH" >> $GITHUB_ENV
-
-      - name: Package IPA
+      - name: Ensure PkgInfo and minimal signature
         run: |
-          echo "=== Creating IPA ==="
           APP_PATH="${{ env.APP_PATH }}"
-          echo "Using .app at: $APP_PATH"
+          printf 'APPL????' > "${APP_PATH}/PkgInfo"
+          echo "PkgInfo created"
+          ls -la "${APP_PATH}/PkgInfo"
+          echo ""
+          echo "=== Final .app contents ==="
+          ls -la "${APP_PATH}/"
+
+      - name: Package as IPA
+        run: |
+          APP_PATH="${{ env.APP_PATH }}"
           rm -rf build/IPA
           mkdir -p build/IPA/Payload
-          cp -R "$APP_PATH" build/IPA/Payload/
-
-          APP_NAME=$(basename "$APP_PATH")
-          echo "Final .app name in Payload: $APP_NAME"
-          ls "build/IPA/Payload/"
-
+          cp -R "${APP_PATH}" build/IPA/Payload/
           cd build/IPA
-          echo ""
-          echo "=== Creating zip (IPA)... ==="
           zip -qr ChengFengAI.ipa Payload
-          ls -lh
           cd ../..
-
-          echo ""
-          echo "=== IPA info ==="
+          echo "=== IPA ==="
           ls -lh build/IPA/ChengFengAI.ipa
-          unzip -l build/IPA/ChengFengAI.ipa | head -20
+          echo ""
+          echo "=== IPA contents listing ==="
+          unzip -l build/IPA/ChengFengAI.ipa | head -30
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
