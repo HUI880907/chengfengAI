@@ -8,14 +8,15 @@ import Combine
 /// 应用根视图，承载主聊天界面与侧边栏
 struct RootView: View {
 
-    // MARK: - 全局状态对象（由当前视图持有并向下注入）
-    @StateObject private var conversationStore: ConversationStore = .shared
-    @StateObject private var settingsStore: SettingsStore = .shared
-    @StateObject private var modelScheduler: ModelScheduler = ModelScheduler(
-        apiClient: QwenAPIClient(apiKey: SettingsStore.shared.settings.apiKey),
-        localModel: IOSLocalModelService()
-    )
-    @StateObject private var speechService: SpeechService = SpeechService()
+    // MARK: - 全局状态对象（从上一层 ChengFengAIApp 注入）
+    @EnvironmentObject private var conversationStore: ConversationStore
+    @EnvironmentObject private var settingsStore: SettingsStore
+    @EnvironmentObject private var modelScheduler: ModelScheduler
+    @EnvironmentObject private var speechService: SpeechService
+    @EnvironmentObject private var clipboardService: ClipboardService
+    @EnvironmentObject private var quickPromptService: QuickPromptService
+    @EnvironmentObject private var tokenUsageMonitor: TokenUsageMonitor
+    @EnvironmentObject private var speechSettings: SpeechSettings
 
     // MARK: - 视图状态
     /// 侧边栏是否已展开
@@ -50,11 +51,6 @@ struct RootView: View {
                     .zIndex(1)
             }
         }
-        // 向下注入所有全局状态
-        .environmentObject(conversationStore)
-        .environmentObject(settingsStore)
-        .environmentObject(modelScheduler)
-        .environmentObject(speechService)
         // 监听来自子视图（例如 SidebarView）的切换通知
         .onReceive(togglePublisher) { _ in
             withAnimation(.easeInOut) {

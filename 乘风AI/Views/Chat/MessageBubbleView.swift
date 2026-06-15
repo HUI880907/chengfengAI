@@ -63,7 +63,7 @@ struct MessageBubbleView: View {
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 6)
-                        .background(Color(.secondarySystemBackground)
+                        .background(Color(.secondarySystemBackground))
                         .cornerRadius(8)
                 } else {
                     // 非系统消息气泡

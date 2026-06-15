@@ -159,4 +159,16 @@ class ConversationStore: ObservableObject {
         conversation.appendMessage(message)
         updateConversation(conversation)
     }
+
+    /// 重置当前活动对话的上下文（清空历史消息但保留对话本身）
+    func resetActiveContext() {
+        guard let active = activeConversation else { return }
+        if let index = conversations.firstIndex(where: { $0.id == active.id }) {
+            var reset = Conversation(title: active.title + "（上下文已重置）")
+            reset.id = active.id
+            conversations[index] = reset
+            activeConversation = reset
+            saveConversations()
+        }
+    }
 }

@@ -21,6 +21,18 @@ struct ChengFengAIApp: App {
     /// 语音朗读服务
     @StateObject private var speechService: SpeechService = SpeechService()
 
+    /// 剪贴板监听服务
+    @StateObject private var clipboardService: ClipboardService = ClipboardService()
+
+    /// 快捷提示服务
+    @StateObject private var quickPromptService: QuickPromptService = QuickPromptService()
+
+    /// Token 使用量监视器
+    @StateObject private var tokenUsageMonitor: TokenUsageMonitor = TokenUsageMonitor()
+
+    /// 语音设置
+    @StateObject private var speechSettings: SpeechSettings = SpeechSettings()
+
     // MARK: - 初始化
 
     init() {
@@ -43,6 +55,10 @@ struct ChengFengAIApp: App {
                 .environmentObject(settingsStore)
                 .environmentObject(modelScheduler)
                 .environmentObject(speechService)
+                .environmentObject(clipboardService)
+                .environmentObject(quickPromptService)
+                .environmentObject(tokenUsageMonitor)
+                .environmentObject(speechSettings)
         }
     }
 }

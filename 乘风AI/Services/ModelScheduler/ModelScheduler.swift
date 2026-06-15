@@ -44,9 +44,9 @@ class ModelScheduler: ObservableObject {
 
     // MARK: - 内部状态
 
-    /// 网络监视器
-    private let pathMonitor = NWPathMonitor()
-    private let monitorQueue = DispatchQueue(label: "com.chengfeng.modelScheduler.pathMonitor")
+    /// 网络监视器（nonisolated 以便 deinit 可访问）
+    nonisolated(unsafe) private let pathMonitor = NWPathMonitor()
+    nonisolated(unsafe) private let monitorQueue = DispatchQueue(label: "com.chengfeng.modelScheduler.pathMonitor")
     private var lastPath: NWPath?
 
     /// 当前正在执行的请求句柄（用于取消）
