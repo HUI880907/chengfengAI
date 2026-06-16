@@ -1,4 +1,4 @@
-name: Test Build
+name: ChengFengAI - iOS IPA Build
 
 on:
   push:
@@ -6,57 +6,113 @@ on:
   workflow_dispatch:
 
 jobs:
-  test:
-    name: Test Build
+  build-ipa:
+    name: Build iOS IPA
     runs-on: macos-15
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: List files
+      - name: Debug - System info
         run: |
-          ls -la
-          ls -la ChengFengAI/
-
-      - name: Try xcodebuild
-        run: |
+          echo "=== SYSTEM INFO ==="
+          uname -a
+          sw_vers
+          echo ""
+          echo "=== Xcode ==="
           xcodebuild -version
-          xcodebuild -showsdks
+          xcrun --sdk iphoneos --show-sdk-path
+          echo ""
+          echo "=== Swift ==="
+          swift --version
+          echo ""
+          echo "=== PATH ==="
+          echo $PATH
+          echo ""
+          echo "=== Working directory ==="
+          pwd
+          ls -la
+
+      - name: Debug - Project structure
+        run: |
+          echo "=== Project root ==="
+          ls -la
+          echo ""
+          echo "=== ChengFengAI directory ==="
+          ls -la ChengFengAI/
+          echo ""
+          echo "=== Swift files ==="
+          find ChengFengAI -name "*.swift" -type f
+          echo ""
+          echo "=== Info.plist ==="
+          cat ChengFengAI/Info.plist
+
+      - name: Debug - Check Swift file
+        run: |
+          SWIFT_FILE="ChengFengAI/ChengFengAIApp.swift"
+          if [ -f "$SWIFT_FILE" ]; then
+            echo "File exists: $SWIFT_FILE"
+            echo "=== File content ==="
+            cat "$SWIFT_FILE"
+          else
+            echo "ERROR: File not found: $SWIFT_FILE"
+            exit 1
+          fi
+
+      - name: Try to compile
+        run: |
+          echo "=== Compiling with swiftc ==="
+          SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path)
+          echo "SDK_PATH: $SDK_PATH"
           
-          mkdir -p testproj
-          cd testproj
+          SWIFT_FILE="ChengFengAI/ChengFengAIApp.swift"
+          echo "SWIFT_FILE: $SWIFT_FILE"
           
-          cat > package.swift << 'EOF'
-// swift-tools-version:5.9
-import PackageDescription
-
-let package = Package(
-    name: "TestApp",
-    platforms: [.iOS(.v16)],
-    products: [
-        .executable(name: "TestApp", targets: ["TestApp"])
-    ],
-    targets: [
-        .target(name: "TestApp")
-    ]
-)
-EOF
-
-          mkdir -p Sources/TestApp
-          cat > Sources/TestApp/main.swift << 'EOF'
-import SwiftUI
-
-@main
-struct TestApp: App {
-    var body: some Scene {
-        WindowGroup {
-            Text("Hello")
-        }
-    }
-}
-EOF
-
-          swift build --configuration release 2>&1 || true
+          echo "=== Running swiftc ==="
+          swiftc \
+            -target arm64-apple-ios16.0 \
+            -sdk "$SDK_PATH" \
+            -framework Foundation \
+            -framework UIKit \
+            -framework SwiftUI \
+            -o ChengFengAI \
+            "$SWIFT_FILE" 2>&1
           
-          cd ..
-          ls -la testproj/.build/release/ 2>&1 || true
+          EXIT_CODE=$?
+          echo "Exit code: $EXIT_CODE"
+          
+          if [ $EXIT_CODE -eq 0 ]; then
+            echo "=== Compilation successful ==="
+            ls -lh ChengFengAI
+            file ChengFengAI
+          else
+            echo "=== Compilation failed ==="
+            exit 1
+          fi
+
+      - name: Create .app bundle
+        run: |
+          echo "=== Creating .app bundle ==="
+          mkdir -p ChengFengAI.app
+          cp ChengFengAI ChengFengAI.app/ChengFengAI
+          cp ChengFengAI/Info.plist ChengFengAI.app/Info.plist
+          printf 'APPL????' > ChengFengAI.app/PkgInfo
+          ls -la ChengFengAI.app/
+
+      - name: Package as IPA
+        run: |
+          echo "=== Packaging IPA ==="
+          mkdir -p IPA/Payload
+          cp -R ChengFengAI.app IPA/Payload/
+          cd IPA
+          zip -r ChengFengAI.ipa Payload
+          ls -lh ChengFengAI.ipa
+          STAT=$(stat -f%z ChengFengAI.ipa)
+          echo "IPA Size: $STAT bytes"
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: ChengFengAI-iOS-IPA
+          path: IPA/ChengFengAI.ipa
+          if-no-files-found: error
