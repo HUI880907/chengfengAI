@@ -1,4 +1,4 @@
-name: ChengFengAI - iOS IPA Build
+name: Test Build
 
 on:
   push:
@@ -6,63 +6,54 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-ipa:
-    name: Build iOS IPA
+  test:
+    name: Test Build
     runs-on: macos-15
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: List files
+      - name: Test environment
         run: |
+          echo "=== Testing environment ==="
+          sw_vers
+          swift --version
+          xcrun --sdk iphoneos --show-sdk-path
           ls -la
+          echo ""
+          echo "=== ChengFengAI directory ==="
           ls -la ChengFengAI/
+          echo ""
+          echo "=== Swift files ==="
+          find ChengFengAI -name "*.swift" -type f
 
-      - name: Compile with swiftc
+      - name: Try to compile
         run: |
           SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path)
-          echo "SDK: $SDK_PATH"
-          
           SWIFT_FILE="ChengFengAI/ChengFengAIApp.swift"
-          echo "Compiling: $SWIFT_FILE"
           
-          swiftc \
-            -target arm64-apple-ios16.0 \
-            -sdk "$SDK_PATH" \
-            -framework Foundation \
-            -framework UIKit \
-            -framework SwiftUI \
-            -o ChengFengAI \
-            "$SWIFT_FILE"
-
-      - name: Check binary
-        run: |
-          ls -lh ChengFengAI
-          file ChengFengAI
-
-      - name: Create minimal .app
-        run: |
-          mkdir -p ChengFengAI.app
-          cp ChengFengAI ChengFengAI.app/ChengFengAI
-          cp ChengFengAI/Info.plist ChengFengAI.app/Info.plist
-          printf 'APPL????' > ChengFengAI.app/PkgInfo
-          mkdir -p ChengFengAI.app/_CodeSignature
-          echo '<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict></dict></plist>' > ChengFengAI.app/_CodeSignature/CodeResources
-          codesign --force --deep --sign - ChengFengAI.app 2>&1 || true
-
-      - name: Package IPA
-        run: |
-          mkdir -p IPA/Payload
-          cp -R ChengFengAI.app IPA/Payload/
-          cd IPA
-          zip -r ChengFengAI.ipa Payload
-          ls -lh ChengFengAI.ipa
-
-      - name: Upload IPA
-        uses: actions/upload-artifact@v4
-        with:
-          name: ChengFengAI-iOS-IPA
-          path: IPA/ChengFengAI.ipa
-          if-no-files-found: error
+          if [ -f "$SWIFT_FILE" ]; then
+            echo "File exists: $SWIFT_FILE"
+            head -20 "$SWIFT_FILE"
+            
+            swiftc \
+              -target arm64-apple-ios16.0 \
+              -sdk "$SDK_PATH" \
+              -framework Foundation \
+              -framework UIKit \
+              -framework SwiftUI \
+              -o testapp \
+              "$SWIFT_FILE" 2>&1
+              
+            if [ -f "testapp" ]; then
+              echo "=== Compilation successful ==="
+              ls -lh testapp
+              file testapp
+            else
+              echo "=== Compilation failed ==="
+              exit 1
+            fi
+          else
+            echo "File not found: $SWIFT_FILE"
+            exit 1
+          fi
