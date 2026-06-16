@@ -34,7 +34,7 @@ let package = Package(
         .target(
             name: "ChengFengAI",
             dependencies: [],
-            path: "乘风AI",
+            path: "ChengFengAI",
             exclude: [
                 "Info.plist"
             ],
