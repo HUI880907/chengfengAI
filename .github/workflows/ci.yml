@@ -13,28 +13,24 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Build with Swift Package Manager
+      - name: Build iOS app
         run: |
-          echo "=== Building with Swift PM ==="
-          swift build \
-            -Xswiftc "-target" \
-            -Xswiftc "arm64-apple-ios16.0" \
-            -Xswiftc "-sdk" \
-            -Xswiftc "$(xcrun --sdk iphoneos --show-sdk-path)"
-
-      - name: Create .app bundle
-        run: |
-          mkdir -p ChengFengAI.app
-          cp .build/arm64-apple-ios16.0/debug/ChengFengAI ChengFengAI.app/ChengFengAI
-          cp ChengFengAI/Info.plist ChengFengAI.app/Info.plist
-          printf 'APPL????' > ChengFengAI.app/PkgInfo
-          codesign --force --deep --sign - ChengFengAI.app 2>&1 || true
+          xcodebuild \
+            -project ChengFengAI.xcodeproj \
+            -scheme ChengFengAI \
+            -configuration Release \
+            -sdk iphoneos \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            -archivePath build/ChengFengAI.xcarchive \
+            archive
 
       - name: Package as IPA
         run: |
-          mkdir -p IPA/Payload
-          cp -R ChengFengAI.app IPA/Payload/
-          cd IPA
+          APP_PATH=$(find build/ChengFengAI.xcarchive -name "*.app" -type d | head -1)
+          mkdir -p build/IPA/Payload
+          cp -R "$APP_PATH" build/IPA/Payload/
+          cd build/IPA
           zip -r ChengFengAI.ipa Payload
           ls -lh ChengFengAI.ipa
 
@@ -42,5 +38,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ChengFengAI-iOS-IPA
-          path: IPA/ChengFengAI.ipa
+          path: build/IPA/ChengFengAI.ipa
           if-no-files-found: error
