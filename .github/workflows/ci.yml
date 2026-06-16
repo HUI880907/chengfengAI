@@ -12,7 +12,7 @@ jobs:
     permissions:
       id-token: write
       attestations: write
-      contents: read
+      contents: write
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -146,3 +146,25 @@ jobs:
         uses: actions/attest-build-provenance@v1
         with:
           subject-path: build/IPA/ChengFengAI.ipa
+
+      - name: Publish to GitHub Releases
+        if: success()
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest-ipa
+          name: 乘风AI - iOS IPA (最新构建)
+          files: build/IPA/ChengFengAI.ipa
+          make_latest: true
+          body: |
+            # 乘风AI iOS 应用
+
+            **Bundle ID:** com.chengfeng.ai
+            **显示名称:** 乘风AI
+            **架构:** arm64 (iPhone)
+            **签名:** Ad-hoc (codesign -s - --deep --force)
+
+            安装方法:
+            1. 下载下方 ChengFengAI.ipa
+            2. 使用 LiveContainer / SideStore / 巨魔商店 安装到 iPhone
+
+            构建信息: ${{ github.sha }} · ${{ github.event.head_commit.message }}
