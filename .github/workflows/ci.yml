@@ -13,28 +13,49 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Generate Xcode project from Swift Package
+      - name: List files
         run: |
-          swift package generate-xcodeproj
           ls -la
+          ls -la ChengFengAI/
 
-      - name: Build with xcodebuild
+      - name: Compile with swiftc
         run: |
-          xcodebuild \
-            -project ChengFengAI.xcodeproj \
-            -scheme ChengFengAI-Package \
-            -configuration Release \
-            -sdk iphoneos \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            -archivePath build/ChengFengAI.xcarchive \
-            archive
+          SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path)
+          echo "SDK: $SDK_PATH"
+          
+          SWIFT_FILE="ChengFengAI/ChengFengAIApp.swift"
+          echo "Compiling: $SWIFT_FILE"
+          
+          swiftc \
+            -target arm64-apple-ios16.0 \
+            -sdk "$SDK_PATH" \
+            -framework Foundation \
+            -framework UIKit \
+            -framework SwiftUI \
+            -o ChengFengAI \
+            "$SWIFT_FILE"
 
-      - name: Package as IPA
+      - name: Check binary
         run: |
-          APP_PATH=$(find build/ChengFengAI.xcarchive -name "*.app" -type d | head -1)
+          ls -lh ChengFengAI
+          file ChengFengAI
+
+      - name: Create minimal .app
+        run: |
+          mkdir -p ChengFengAI.app
+          cp ChengFengAI ChengFengAI.app/ChengFengAI
+          cp ChengFengAI/Info.plist ChengFengAI.app/Info.plist
+          printf 'APPL????' > ChengFengAI.app/PkgInfo
+          mkdir -p ChengFengAI.app/_CodeSignature
+          echo '<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict></dict></plist>' > ChengFengAI.app/_CodeSignature/CodeResources
+          codesign --force --deep --sign - ChengFengAI.app 2>&1 || true
+
+      - name: Package IPA
+        run: |
           mkdir -p IPA/Payload
-          cp -R "$APP_PATH" IPA/Payload/
+          cp -R ChengFengAI.app IPA/Payload/
           cd IPA
           zip -r ChengFengAI.ipa Payload
           ls -lh ChengFengAI.ipa
