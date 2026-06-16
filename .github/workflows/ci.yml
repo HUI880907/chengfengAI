@@ -13,31 +13,19 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Build with swiftc
+      - name: Build with Swift Package Manager
         run: |
-          SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path)
-          mkdir -p src
-          find ChengFengAI -name "*.swift" -type f -print0 | xargs -0 cp -t src/
-          
-          swiftc \
-            -target arm64-apple-ios16.0 \
-            -sdk "${SDK_PATH}" \
-            -O \
-            -framework Foundation \
-            -framework UIKit \
-            -framework SwiftUI \
-            -framework Combine \
-            -framework Network \
-            -framework AVFoundation \
-            -framework UniformTypeIdentifiers \
-            -emit-executable \
-            -o ChengFengAI \
-            $(ls src/*.swift)
+          echo "=== Building with Swift PM ==="
+          swift build \
+            -Xswiftc "-target" \
+            -Xswiftc "arm64-apple-ios16.0" \
+            -Xswiftc "-sdk" \
+            -Xswiftc "$(xcrun --sdk iphoneos --show-sdk-path)"
 
       - name: Create .app bundle
         run: |
           mkdir -p ChengFengAI.app
-          cp ChengFengAI ChengFengAI.app/ChengFengAI
+          cp .build/arm64-apple-ios16.0/debug/ChengFengAI ChengFengAI.app/ChengFengAI
           cp ChengFengAI/Info.plist ChengFengAI.app/Info.plist
           printf 'APPL????' > ChengFengAI.app/PkgInfo
           codesign --force --deep --sign - ChengFengAI.app 2>&1 || true
