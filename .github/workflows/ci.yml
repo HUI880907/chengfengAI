@@ -13,29 +13,40 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Generate Xcode project
+      - name: Build with swiftc
         run: |
-          brew install xcodegen
-          xcodegen generate
+          SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path)
+          mkdir -p src
+          find ChengFengAI -name "*.swift" -type f -print0 | xargs -0 cp -t src/
+          
+          swiftc \
+            -target arm64-apple-ios16.0 \
+            -sdk "${SDK_PATH}" \
+            -O \
+            -framework Foundation \
+            -framework UIKit \
+            -framework SwiftUI \
+            -framework Combine \
+            -framework Network \
+            -framework AVFoundation \
+            -framework UniformTypeIdentifiers \
+            -emit-executable \
+            -o ChengFengAI \
+            $(ls src/*.swift)
 
-      - name: Build iOS app
+      - name: Create .app bundle
         run: |
-          xcodebuild \
-            -project ChengFengAI.xcodeproj \
-            -scheme ChengFengAI \
-            -configuration Release \
-            -sdk iphoneos \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            -archivePath build/ChengFengAI.xcarchive \
-            archive
+          mkdir -p ChengFengAI.app
+          cp ChengFengAI ChengFengAI.app/ChengFengAI
+          cp ChengFengAI/Info.plist ChengFengAI.app/Info.plist
+          printf 'APPL????' > ChengFengAI.app/PkgInfo
+          codesign --force --deep --sign - ChengFengAI.app 2>&1 || true
 
       - name: Package as IPA
         run: |
-          APP_PATH=$(find build/ChengFengAI.xcarchive -name "*.app" -type d | head -1)
-          mkdir -p build/IPA/Payload
-          cp -R "$APP_PATH" build/IPA/Payload/
-          cd build/IPA
+          mkdir -p IPA/Payload
+          cp -R ChengFengAI.app IPA/Payload/
+          cd IPA
           zip -r ChengFengAI.ipa Payload
           ls -lh ChengFengAI.ipa
 
@@ -43,5 +54,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ChengFengAI-iOS-IPA
-          path: build/IPA/ChengFengAI.ipa
+          path: IPA/ChengFengAI.ipa
           if-no-files-found: error
