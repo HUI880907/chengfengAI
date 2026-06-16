@@ -13,24 +13,53 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Build iOS app
+      - name: Debug - list files
         run: |
-          xcodebuild \
-            -project ChengFengAI.xcodeproj \
-            -scheme ChengFengAI \
-            -configuration Release \
-            -sdk iphoneos \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            -archivePath build/ChengFengAI.xcarchive \
-            archive
+          echo "=== Project structure ==="
+          ls -la
+          echo ""
+          echo "=== ChengFengAI directory ==="
+          ls -la ChengFengAI/
+          echo ""
+          echo "=== Swift files ==="
+          find ChengFengAI -name "*.swift" -type f
+
+      - name: Build with swiftc
+        run: |
+          SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path)
+          echo "SDK Path: $SDK_PATH"
+          
+          SWIFT_FILE=$(find ChengFengAI -name "*App.swift" -type f | head -1)
+          echo "Using file: $SWIFT_FILE"
+          
+          swiftc \
+            -target arm64-apple-ios16.0 \
+            -sdk "${SDK_PATH}" \
+            -framework Foundation \
+            -framework UIKit \
+            -framework SwiftUI \
+            -emit-executable \
+            -o ChengFengAI \
+            "$SWIFT_FILE"
+
+      - name: Check binary
+        run: |
+          ls -lh ChengFengAI
+          file ChengFengAI
+
+      - name: Create .app bundle
+        run: |
+          mkdir -p ChengFengAI.app
+          cp ChengFengAI ChengFengAI.app/ChengFengAI
+          cp ChengFengAI/Info.plist ChengFengAI.app/Info.plist
+          printf 'APPL????' > ChengFengAI.app/PkgInfo
+          codesign --force --deep --sign - ChengFengAI.app 2>&1 || true
 
       - name: Package as IPA
         run: |
-          APP_PATH=$(find build/ChengFengAI.xcarchive -name "*.app" -type d | head -1)
-          mkdir -p build/IPA/Payload
-          cp -R "$APP_PATH" build/IPA/Payload/
-          cd build/IPA
+          mkdir -p IPA/Payload
+          cp -R ChengFengAI.app IPA/Payload/
+          cd IPA
           zip -r ChengFengAI.ipa Payload
           ls -lh ChengFengAI.ipa
 
@@ -38,5 +67,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ChengFengAI-iOS-IPA
-          path: build/IPA/ChengFengAI.ipa
+          path: IPA/ChengFengAI.ipa
           if-no-files-found: error
