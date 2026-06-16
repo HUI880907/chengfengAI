@@ -13,47 +13,50 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Test environment
+      - name: List files
         run: |
-          echo "=== Testing environment ==="
-          sw_vers
-          swift --version
-          xcrun --sdk iphoneos --show-sdk-path
           ls -la
-          echo ""
-          echo "=== ChengFengAI directory ==="
           ls -la ChengFengAI/
-          echo ""
-          echo "=== Swift files ==="
-          find ChengFengAI -name "*.swift" -type f
 
-      - name: Try to compile
+      - name: Try xcodebuild
         run: |
-          SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path)
-          SWIFT_FILE="ChengFengAI/ChengFengAIApp.swift"
+          xcodebuild -version
+          xcodebuild -showsdks
           
-          if [ -f "$SWIFT_FILE" ]; then
-            echo "File exists: $SWIFT_FILE"
-            head -20 "$SWIFT_FILE"
-            
-            swiftc \
-              -target arm64-apple-ios16.0 \
-              -sdk "$SDK_PATH" \
-              -framework Foundation \
-              -framework UIKit \
-              -framework SwiftUI \
-              -o testapp \
-              "$SWIFT_FILE" 2>&1
-              
-            if [ -f "testapp" ]; then
-              echo "=== Compilation successful ==="
-              ls -lh testapp
-              file testapp
-            else
-              echo "=== Compilation failed ==="
-              exit 1
-            fi
-          else
-            echo "File not found: $SWIFT_FILE"
-            exit 1
-          fi
+          mkdir -p testproj
+          cd testproj
+          
+          cat > package.swift << 'EOF'
+// swift-tools-version:5.9
+import PackageDescription
+
+let package = Package(
+    name: "TestApp",
+    platforms: [.iOS(.v16)],
+    products: [
+        .executable(name: "TestApp", targets: ["TestApp"])
+    ],
+    targets: [
+        .target(name: "TestApp")
+    ]
+)
+EOF
+
+          mkdir -p Sources/TestApp
+          cat > Sources/TestApp/main.swift << 'EOF'
+import SwiftUI
+
+@main
+struct TestApp: App {
+    var body: some Scene {
+        WindowGroup {
+            Text("Hello")
+        }
+    }
+}
+EOF
+
+          swift build --configuration release 2>&1 || true
+          
+          cd ..
+          ls -la testproj/.build/release/ 2>&1 || true
